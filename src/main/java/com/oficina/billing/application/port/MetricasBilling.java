@@ -18,12 +18,6 @@ public interface MetricasBilling {
 
     void registrarResultadoPagamento(UUID pagamentoId, StatusPagamento status);
 
-    void registrarWebhook(String assinatura);
-
-    void registrarReconciliacao(String resultado);
-
-    void registrarEstorno(String resultado, UUID orcamentoId, String pagamentoGatewayId);
-
     void registrarIntegracaoMercadoPago(String operacao, String resultado);
 
     void registrarMensagemPublicada(String tipo);

@@ -65,12 +65,6 @@ class ValidadorAssinaturaMercadoPagoTest {
         assertThat(semSegredo.verificar(cabecalho, REQUEST_ID, "123456")).isEqualTo(ResultadoAssinatura.INVALIDA);
     }
 
-    @Test
-    void rotuloDaMetrica() {
-        assertThat(ResultadoAssinatura.VALIDA.rotulo()).isEqualTo("valida");
-        assertThat(ResultadoAssinatura.AUSENTE.rotulo()).isEqualTo("ausente");
-    }
-
     private static ValidadorAssinaturaMercadoPago validador(String segredo) {
         return new ValidadorAssinaturaMercadoPago(new PropriedadesMercadoPago("http://mp", "token", segredo, true, false,
             "http://retorno", null, Duration.ofSeconds(2), Duration.ofSeconds(5)));

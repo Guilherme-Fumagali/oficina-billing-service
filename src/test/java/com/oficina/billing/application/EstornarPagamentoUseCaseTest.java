@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -73,7 +74,6 @@ class EstornarPagamentoUseCaseTest {
         assertThat(pagamento.getStatus()).isEqualTo(StatusPagamento.ESTORNADO);
         verify(publicador).publicar(comando.correlacao(),
             new PagamentoEstornado(orcamento.getId(), pagamento.getId(), pagamento.getValor(), AGORA));
-        verify(metricas).registrarEstorno("sucesso", orcamento.getId(), "300");
     }
 
     @Test
@@ -156,7 +156,7 @@ class EstornarPagamentoUseCaseTest {
 
         assertThatThrownBy(() -> useCase.executar(comando)).isInstanceOf(GatewayPagamentoIndisponivelException.class);
 
-        verify(metricas).registrarEstorno("falha", orcamento.getId(), "301");
+        verify(metricas).registrarFalha(eq("estorno"), eq("301"), any(GatewayPagamentoIndisponivelException.class));
         verify(mensagensProcessadas, never()).registrar(any(), anyString());
         verifyNoInteractions(publicador);
     }

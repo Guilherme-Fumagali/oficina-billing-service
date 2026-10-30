@@ -92,7 +92,7 @@ class ProcessamentoPagamentosUseCaseTest {
 
         assertThat(useCase.executar()).isEqualTo(1);
 
-        verify(metricas).registrarReconciliacao("aprovado");
+        verify(processador).aplicar(resultado);
     }
 
     @Test
@@ -111,8 +111,7 @@ class ProcessamentoPagamentosUseCaseTest {
 
         assertThat(useCase.executar()).isEqualTo(2);
 
-        verify(metricas).registrarReconciliacao("sem_pagamento");
-        verify(metricas).registrarReconciliacao("erro");
+        verify(processador, never()).aplicar(any());
         verify(metricas).registrarFalha("reconciliacao", comFalha.getId().toString(), falha);
     }
 

@@ -140,13 +140,11 @@ public class ProcessadorResultadoPagamento {
         }
         pagamento.estornar(relogio.agora());
         pagamentos.salvar(pagamento);
-        metricas.registrarEstorno("externo", pagamento.getOrcamentoId(), resultado.id());
         return DesfechoPagamento.ESTORNADO;
     }
 
     private void estornarAutomaticamente(UUID orcamentoId, PagamentoGateway resultado) {
         gateway.estornar(resultado.id(), "estorno-automatico-" + resultado.id());
-        metricas.registrarEstorno("automatico", orcamentoId, resultado.id());
         unidadeDeTrabalho.executar(() -> pagamentos.buscarPorOrcamentoId(orcamentoId)
             .filter(Pagamento::isPendente)
             .ifPresent(pagamento -> {

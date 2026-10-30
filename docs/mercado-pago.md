@@ -100,7 +100,7 @@ Se o Mercado Pago enviar notificações sem o cabeçalho `x-signature` para a `n
 | `FUND` | recusado por saldo insuficiente | `PagamentoRecusado` |
 | `SECU` | recusado por código de segurança inválido | `PagamentoRecusado` |
 
-Com `binary_mode: true`, o Checkout Pro só conclui pagamentos aprovados ou recusados. Com `PAGAMENTO_RECUSA_ENCERRA=true` (padrão), a primeira recusa encerra o pagamento; um pagamento aprovado depois disso, para o mesmo orçamento, é estornado automaticamente e registrado na métrica `oficina.pagamento.estornos{resultado=automatico}`.
+Com `binary_mode: true`, o Checkout Pro só conclui pagamentos aprovados ou recusados. Com `PAGAMENTO_RECUSA_ENCERRA=true` (padrão), a primeira recusa encerra o pagamento; um pagamento aprovado depois disso, para o mesmo orçamento, é estornado automaticamente e o pagamento passa a `ESTORNADO`.
 
 O estorno feito na compensação `EstornarPagamento` aparece no painel da conta de vendedor de teste, na atividade do pagamento.
 

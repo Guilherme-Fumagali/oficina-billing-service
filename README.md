@@ -223,7 +223,7 @@ sequenceDiagram
 | Registro | cada notificação recebida grava `notificacoes_pagamento` (request id, data id, tipo, assinatura válida, horário) |
 | Reconciliação | job a cada 60 s para pagamentos pendentes criados há mais de 60 s; as linhas são reservadas por 2 minutos (`reservado_ate`) com `FOR UPDATE SKIP LOCKED`, e as chamadas HTTP acontecem fora da transação |
 | Recusa | com `PAGAMENTO_RECUSA_ENCERRA=true` (padrão), a primeira recusa encerra o pagamento e publica `PagamentoRecusado` com o `status_detail` |
-| Pagamento tardio | pagamento aprovado que chega para orçamento cancelado ou pagamento já encerrado é estornado automaticamente e contado em `oficina.pagamento.estornos{resultado=automatico}` |
+| Pagamento tardio | pagamento aprovado que chega para orçamento cancelado ou pagamento já encerrado é estornado automaticamente e o pagamento passa a `ESTORNADO` |
 | Mapeamento de status | `approved` → `APROVADO`; `rejected`, `cancelled` → `RECUSADO`; `refunded`, `charged_back` → `ESTORNADO`; `pending`, `in_process`, `authorized` → `PENDENTE` |
 
 Cartões de teste (titular define o resultado): nome `APRO` aprova o pagamento e `OTHE` recusa. Números, CPF de teste e demais nomes estão em [`docs/mercado-pago.md`](docs/mercado-pago.md#8-testes-de-pagamento).
@@ -350,11 +350,11 @@ Workflows em [`.github/workflows`](.github/workflows):
 |---|---|---|---|
 | Unitário de domínio | 4 | 38 | `Orcamento`, `ItemOrcamento`, `Pagamento`, `TokenDecisao`, Java puro |
 | Unitário de aplicação | 10 | 59 | casos de uso com Mockito e unidade de trabalho imediata |
-| Unitário de infraestrutura | 11 | 50 | validador de assinatura com vetor HMAC conhecido, mapeamento de status do Mercado Pago, consumidor SQS, relay, monitor da DLQ, métricas, notificação, JWT, tratamento de erros, simulador |
+| Unitário de infraestrutura | 11 | 49 | validador de assinatura com vetor HMAC conhecido, mapeamento de status do Mercado Pago, consumidor SQS, relay, monitor da DLQ, métricas, notificação, JWT, tratamento de erros, simulador |
 | Integração HTTP com WireMock | 1 | 13 | `MercadoPagoGateway`: preferência, consulta, busca, estorno, repetição em 5xx e tempo esgotado, ausência de repetição em 4xx, circuito aberto |
 | Integração com Testcontainers | 3 | 25 | Spring completo com PostgreSQL (`postgres:16-alpine`), SQS no LocalStack (`localstack/localstack:3`) e Mercado Pago no WireMock |
 
-São 185 casos. Os testes de integração cobrem: comando `GerarOrcamento` na fila até `OrcamentoGerado` em `os-eventos`; duplicata descartada e comando repetido respondendo o mesmo orçamento; `ComandoRejeitado` para dados inválidos; cancelamento de OS sem orçamento; aprovação até `OrcamentoAprovado`; decisão pelo link do e-mail; webhook assinado até `PagamentoAprovado`; webhook sem assinatura recusado; `EstornarPagamento` chamando o refund; expiração; reconciliação; `SKIP LOCKED` entre réplicas; leitura da DLQ; contrato OpenAPI.
+São 184 casos. Os testes de integração cobrem: comando `GerarOrcamento` na fila até `OrcamentoGerado` em `os-eventos`; duplicata descartada e comando repetido respondendo o mesmo orçamento; `ComandoRejeitado` para dados inválidos; cancelamento de OS sem orçamento; aprovação até `OrcamentoAprovado`; decisão pelo link do e-mail; webhook assinado até `PagamentoAprovado`; webhook sem assinatura recusado; `EstornarPagamento` chamando o refund; expiração; reconciliação; `SKIP LOCKED` entre réplicas; leitura da DLQ; contrato OpenAPI.
 
 ```bash
 ./mvnw test      # requer Docker para o Testcontainers
@@ -367,9 +367,9 @@ Cobertura medida pelo JaCoCo na última execução de `./mvnw verify`:
 | Camada | Linhas | Ramos |
 |---|---|---|
 | Domínio | 99,1% (221/223) | 96,6% (85/88) |
-| Aplicação | 99,8% (433/434) | 95,1% (78/82) |
-| Infraestrutura | 98,0% (824/841) | 83,6% (173/207) |
-| **Total** | **98,7% (1478/1498)** | **89,1% (336/377)** |
+| Aplicação | 99,8% (427/428) | 95,1% (78/82) |
+| Infraestrutura | 97,9% (812/829) | 83,4% (171/205) |
+| **Total** | **98,6% (1460/1480)** | **89,1% (334/375)** |
 
 O build falha se a cobertura do projeto ficar abaixo de 80% das linhas ou de 70% dos ramos. Ficam fora da medição a classe `BillingServiceApplication`, a `OpenApiConfig` (somente anotações) e o código gerado pelo Lombok (`lombok.addLombokGeneratedAnnotation`). A cobertura e o quality gate também aparecem no SonarCloud (badges no topo).
 
@@ -423,7 +423,7 @@ Erros seguem o formato `ProblemDetail`: `400` (validação e parâmetros), `401`
 | Trace pela fila | cabeçalhos do New Relic gravados na linha do outbox; o relay e o consumidor são transações `@Trace(dispatcher = true)` que aceitam os cabeçalhos (`Mensageria/Relay/<tipo>` e `Mensageria/Consumo/<tipo>`) |
 | Correlação | atributos `os.id`, `saga.id` e `mensagem.tipo` nas transações de mensagem e MDC `os.id`, `saga.id`, `mensagem.id` nos logs |
 | Logs | formato ECS em JSON no perfil `k8s`, encaminhados pelo agente |
-| Métricas (OTLP) | `oficina.orcamento.gerados`, `oficina.orcamento.decisoes{resultado, canal}`, `oficina.orcamento.valor_aprovado`, `oficina.pagamento.resultados{status}`, `oficina.pagamento.webhooks{assinatura}`, `oficina.pagamento.reconciliacoes{resultado}`, `oficina.pagamento.estornos{resultado}`, `oficina.integracao.mercadopago{operacao, resultado}`, `oficina.mensageria.publicadas{tipo}`, `oficina.mensageria.consumidas{tipo, resultado}` e o gauge `oficina.mensageria.dlq.mensagens{fila}`, lido a cada 60 s da DLQ |
+| Métricas (OTLP) | `oficina.orcamento.gerados`, `oficina.orcamento.decisoes{resultado, canal}`, `oficina.orcamento.valor_aprovado`, `oficina.pagamento.resultados{status}`, `oficina.integracao.mercadopago{operacao, resultado}`, `oficina.mensageria.publicadas{tipo}`, `oficina.mensageria.consumidas{tipo, resultado}` e o gauge `oficina.mensageria.dlq.mensagens{fila}`, lido a cada 60 s da DLQ |
 
 As condições de alerta (DLQ com mensagens, falhas na integração com o Mercado Pago) e os dashboards são criados pelo `oficina-infra-k8s`.
 

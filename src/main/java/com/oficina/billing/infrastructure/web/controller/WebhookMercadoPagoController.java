@@ -57,7 +57,6 @@ public class WebhookMercadoPagoController {
         var dataId = primeiroPreenchido(dataIdConsulta, corpo != null && corpo.data() != null ? corpo.data().id() : null);
         var tipo = primeiroPreenchido(tipoConsulta, topico, corpo != null ? corpo.type() : null);
         var verificacao = validador.verificar(assinatura, requestId, dataId);
-        metricas.registrarWebhook(verificacao.rotulo());
         processarNotificacao.registrar(requestId, dataId, tipo, verificacao == ResultadoAssinatura.VALIDA);
 
         if (verificacao != ResultadoAssinatura.VALIDA && propriedades.exigirAssinatura()) {

@@ -45,17 +45,11 @@ class MicrometerMetricasBillingTest {
     }
 
     @Test
-    void pagamentosWebhooksReconciliacoesEstornosEIntegracao() {
+    void pagamentosEIntegracao() {
         metricas.registrarResultadoPagamento(UUID.randomUUID(), StatusPagamento.APROVADO);
-        metricas.registrarWebhook("valida");
-        metricas.registrarReconciliacao("pendente");
-        metricas.registrarEstorno("automatico", UUID.randomUUID(), "123");
         metricas.registrarIntegracaoMercadoPago("estornar", "falha");
 
         assertThat(registry.counter("oficina.pagamento.resultados", "status", "APROVADO").count()).isEqualTo(1);
-        assertThat(registry.counter("oficina.pagamento.webhooks", "assinatura", "valida").count()).isEqualTo(1);
-        assertThat(registry.counter("oficina.pagamento.reconciliacoes", "resultado", "pendente").count()).isEqualTo(1);
-        assertThat(registry.counter("oficina.pagamento.estornos", "resultado", "automatico").count()).isEqualTo(1);
         assertThat(registry.counter("oficina.integracao.mercadopago", "operacao", "estornar", "resultado", "falha").count()).isEqualTo(1);
     }
 

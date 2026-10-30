@@ -72,7 +72,7 @@ class AgendamentosIntegrationTest extends IntegracaoTestBase {
         var aprovado = aguardarEvento("PagamentoAprovado", orcamento.getOsId());
         assertThat(aprovado.dados().path("pagamentoId").asText()).isEqualTo(pagamento.getId().toString());
         assertThat(aprovado.dados().path("valor").decimalValue()).isEqualTo(new BigDecimal("210.00"));
-        assertThat(registry.find("oficina.pagamento.reconciliacoes").tags("resultado", "aprovado").counter()).isNotNull();
+        assertThat(registry.find("oficina.pagamento.resultados").tags("status", "APROVADO").counter()).isNotNull();
     }
 
     @Test

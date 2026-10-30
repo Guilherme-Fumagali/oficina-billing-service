@@ -73,7 +73,7 @@ public class EstornarPagamentoUseCase {
         try {
             gateway.estornar(pagamento.getMpPaymentId(), pagamento.getId().toString());
         } catch (RuntimeException e) {
-            metricas.registrarEstorno("falha", pagamento.getOrcamentoId(), pagamento.getMpPaymentId());
+            metricas.registrarFalha("estorno", pagamento.getMpPaymentId(), e);
             throw e;
         }
     }
@@ -86,7 +86,6 @@ public class EstornarPagamentoUseCase {
         if (pagamento.isAprovado()) {
             pagamento.estornar(agora);
             var salvo = pagamentos.salvar(pagamento);
-            metricas.registrarEstorno("sucesso", salvo.getOrcamentoId(), salvo.getMpPaymentId());
             metricas.registrarResultadoPagamento(salvo.getId(), StatusPagamento.ESTORNADO);
             return new PagamentoEstornado(orcamentoId, salvo.getId(), salvo.getValor(), salvo.getEstornadoEm());
         }

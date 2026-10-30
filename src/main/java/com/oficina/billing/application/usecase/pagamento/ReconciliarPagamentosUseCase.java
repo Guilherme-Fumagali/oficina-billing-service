@@ -6,7 +6,6 @@ import com.oficina.billing.application.port.Relogio;
 import com.oficina.billing.application.port.UnidadeDeTrabalho;
 import com.oficina.billing.domain.repository.PagamentoRepository;
 
-import java.util.Locale;
 import java.util.UUID;
 
 public class ReconciliarPagamentosUseCase {
@@ -45,13 +44,10 @@ public class ReconciliarPagamentosUseCase {
 
     private void reconciliar(UUID pagamentoId) {
         try {
-            var desfecho = pagamentos.buscarPorId(pagamentoId)
+            pagamentos.buscarPorId(pagamentoId)
                 .flatMap(pagamento -> gateway.buscarPorOrcamento(pagamento.getOrcamentoId()))
-                .map(processador::aplicar)
-                .orElse(DesfechoPagamento.SEM_PAGAMENTO);
-            metricas.registrarReconciliacao(desfecho.name().toLowerCase(Locale.ROOT));
+                .ifPresent(processador::aplicar);
         } catch (RuntimeException e) {
-            metricas.registrarReconciliacao("erro");
             metricas.registrarFalha("reconciliacao", pagamentoId.toString(), e);
         }
     }

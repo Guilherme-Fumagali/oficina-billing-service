@@ -21,9 +21,6 @@ public class MicrometerMetricasBilling implements MetricasBilling {
     static final String ORCAMENTO_DECISOES = "oficina.orcamento.decisoes";
     static final String ORCAMENTO_VALOR_APROVADO = "oficina.orcamento.valor_aprovado";
     static final String PAGAMENTO_RESULTADOS = "oficina.pagamento.resultados";
-    static final String PAGAMENTO_WEBHOOKS = "oficina.pagamento.webhooks";
-    static final String PAGAMENTO_RECONCILIACOES = "oficina.pagamento.reconciliacoes";
-    static final String PAGAMENTO_ESTORNOS = "oficina.pagamento.estornos";
     static final String INTEGRACAO_MERCADOPAGO = "oficina.integracao.mercadopago";
     static final String MENSAGERIA_PUBLICADAS = "oficina.mensageria.publicadas";
     static final String MENSAGERIA_CONSUMIDAS = "oficina.mensageria.consumidas";
@@ -70,25 +67,6 @@ public class MicrometerMetricasBilling implements MetricasBilling {
     public void registrarResultadoPagamento(UUID pagamentoId, StatusPagamento status) {
         registry.counter(PAGAMENTO_RESULTADOS, "status", status.name()).increment();
         log.atInfo().addKeyValue("pagamento.id", pagamentoId).log("Pagamento {} passou para {}", pagamentoId, status);
-    }
-
-    @Override
-    public void registrarWebhook(String assinatura) {
-        registry.counter(PAGAMENTO_WEBHOOKS, "assinatura", assinatura).increment();
-    }
-
-    @Override
-    public void registrarReconciliacao(String resultado) {
-        registry.counter(PAGAMENTO_RECONCILIACOES, RESULTADO, resultado).increment();
-    }
-
-    @Override
-    public void registrarEstorno(String resultado, UUID orcamentoId, String pagamentoGatewayId) {
-        registry.counter(PAGAMENTO_ESTORNOS, RESULTADO, resultado).increment();
-        var nivel = "sucesso".equals(resultado) ? log.atInfo() : log.atWarn();
-        nivel.addKeyValue(ORCAMENTO_ID, orcamentoId)
-            .addKeyValue("pagamento.gateway.id", pagamentoGatewayId)
-            .log("Estorno {} do pagamento {} do orçamento {}", resultado, pagamentoGatewayId, orcamentoId);
     }
 
     @Override

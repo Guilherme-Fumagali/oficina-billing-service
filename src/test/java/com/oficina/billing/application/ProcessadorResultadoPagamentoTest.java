@@ -114,7 +114,6 @@ class ProcessadorResultadoPagamentoTest {
 
         assertThat(desfecho).isEqualTo(DesfechoPagamento.ESTORNO_AUTOMATICO);
         verify(gateway).estornar("104", "estorno-automatico-104");
-        verify(metricas).registrarEstorno("automatico", orcamento.getId(), "104");
         assertThat(pagamento.getStatus()).isEqualTo(StatusPagamento.ESTORNADO);
         assertThat(pagamento.getMpPaymentId()).isEqualTo("104");
         verifyNoInteractions(publicador);
@@ -191,7 +190,6 @@ class ProcessadorResultadoPagamentoTest {
 
         assertThat(desfecho).isEqualTo(DesfechoPagamento.ESTORNADO);
         assertThat(aprovado.getStatus()).isEqualTo(StatusPagamento.ESTORNADO);
-        verify(metricas).registrarEstorno("externo", orcamento.getId(), "112");
     }
 
     @Test

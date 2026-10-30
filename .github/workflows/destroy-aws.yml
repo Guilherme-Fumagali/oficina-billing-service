@@ -1,0 +1,65 @@
+name: Destroy AWS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+  TF_VAR_ambiente: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+
+jobs:
+  destroy:
+    name: Destroy (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - run: terraform init -backend-config="key=billing/${AMBIENTE}/terraform.tfstate"
+
+      - name: Destroy
+        env:
+          TF_VAR_mp_access_token: ${{ secrets.MP_ACCESS_TOKEN }}
+          TF_VAR_mp_webhook_secret: ${{ secrets.MP_WEBHOOK_SECRET }}
+        run: terraform destroy -auto-approve -input=false
+
+      - name: Conferir que banco e filas foram removidos
+        run: |
+          RDS=$(aws rds describe-db-instances \
+            --query "DBInstances[?DBInstanceIdentifier=='oficina-billing-db-${AMBIENTE}'].[DBInstanceIdentifier,DBInstanceStatus]" \
+            --output text)
+          if [ -n "$RDS" ]; then
+            echo "::error::RDS ainda existe: $RDS"
+            exit 1
+          fi
+          for fila in "oficina-${AMBIENTE}-billing-comandos" "oficina-${AMBIENTE}-billing-comandos-dlq"; do
+            removida=false
+            for tentativa in $(seq 1 12); do
+              if ! aws sqs get-queue-url --queue-name "$fila" > /dev/null 2>&1; then
+                removida=true
+                break
+              fi
+              sleep 10
+            done
+            if [ "$removida" != true ]; then
+              echo "::error::Fila $fila ainda existe"
+              exit 1
+            fi
+          done
+          echo "RDS oficina-billing-db-${AMBIENTE} e filas do Billing removidos."

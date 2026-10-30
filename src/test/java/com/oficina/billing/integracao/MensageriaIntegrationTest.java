@@ -103,6 +103,19 @@ class MensageriaIntegrationTest extends IntegracaoTestBase {
     }
 
     @Test
+    void cancelarOrcamentoDeOsSemOrcamentoRespondeSemIdentificador() {
+        var osId = UUID.randomUUID();
+
+        enviarComando("CancelarOrcamento", UUID.randomUUID(), UUID.randomUUID(), osId, "{\"motivo\":\"REJEICAO\"}");
+
+        var cancelado = aguardarEvento("OrcamentoCancelado", osId);
+        assertThat(cancelado.dados().path("orcamentoId").isNull()).isTrue();
+        assertThat(cancelado.dados().path("motivo").asText()).isEqualTo("REJEICAO");
+        assertThat(eventosDaOs(osId)).noneMatch(evento -> "ComandoRejeitado".equals(evento.tipo()));
+        assertThat(orcamentoJpa.findByOsId(osId)).isEmpty();
+    }
+
+    @Test
     void estornarPagamentoAprovadoChamaORefundERespondePagamentoEstornado() throws Exception {
         var criado = criarOrcamentoPelaFila(UUID.randomUUID());
         var pagamentoId = aprovarEPagar(criado, "880011");

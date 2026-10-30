@@ -11,8 +11,10 @@ info:
     transportam o contexto de rastreamento distribuído.
 
     Regras de consumo: a mensagem é descartada se o `mensagemId` já foi processado; comandos são
-    idempotentes por `osId`; comando inválido para o estado do serviço recebe `ComandoRejeitado`
-    e é reconhecido; falha técnica devolve a mensagem à fila e, após 5 recebimentos, ela vai para a DLQ.
+    idempotentes por `osId`; as compensações `CancelarOrcamento` e `EstornarPagamento` sempre
+    recebem resposta de sucesso, mesmo quando não há orçamento ou pagamento aprovado; comando com
+    dados malformados recebe `ComandoRejeitado` (`DADOS_INVALIDOS`) e é reconhecido; falha técnica
+    devolve a mensagem à fila e, após 5 recebimentos, ela vai para a DLQ.
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0
@@ -240,7 +242,10 @@ components:
       required: [orcamentoId]
       properties:
         orcamentoId:
-          $ref: '#/components/schemas/Uuid'
+          description: Nulo quando a OS não tem orçamento; a compensação é respondida mesmo assim.
+          oneOf:
+            - $ref: '#/components/schemas/Uuid'
+            - type: 'null'
         motivo:
           type: string
     DadosPagamentoAprovado:
@@ -298,7 +303,7 @@ components:
           type: string
         codigo:
           type: string
-          enum: [DADOS_INVALIDOS, ORCAMENTO_NAO_ENCONTRADO]
+          enum: [DADOS_INVALIDOS]
   messages:
     GerarOrcamento:
       name: GerarOrcamento
@@ -351,7 +356,7 @@ components:
     CancelarOrcamento:
       name: CancelarOrcamento
       title: Cancelar orçamento
-      summary: Compensação da saga; idempotente e sempre respondida com OrcamentoCancelado quando há orçamento.
+      summary: Compensação da saga; idempotente e sempre respondida com OrcamentoCancelado, com orcamentoId nulo quando a OS não tem orçamento.
       traits:
         - $ref: '#/components/messageTraits/atributosSqs'
       payload:
@@ -569,6 +574,22 @@ components:
             dados:
               orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
               motivo: PAGAMENTO_RECUSADO
+        - name: osSemOrcamento
+          headers:
+            tipo: OrcamentoCancelado
+            versao: '1'
+          payload:
+            mensagemId: 6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e
+            tipo: OrcamentoCancelado
+            versao: 1
+            sagaId: 8a2d3f1b-2e6c-4d8f-9b62-4a1f3b0c7d55
+            osId: d4b2e9b3-6f9a-4c4b-8e2d-3c8f7a5b0f21
+            causadaPor: 7e6d5c4b-3a29-4180-9f7e-6d5c4b3a2918
+            origem: billing-service
+            ocorridoEm: '2026-10-31T09:00:01Z'
+            dados:
+              orcamentoId: null
+              motivo: REJEICAO
     PagamentoAprovado:
       name: PagamentoAprovado
       title: Pagamento aprovado
@@ -707,7 +728,7 @@ components:
     ComandoRejeitado:
       name: ComandoRejeitado
       title: Comando rejeitado
-      summary: Rejeição de negócio; a mensagem de comando é reconhecida e não volta para a fila.
+      summary: Comando com dados malformados (DADOS_INVALIDOS); a mensagem de comando é reconhecida e não volta para a fila.
       traits:
         - $ref: '#/components/messageTraits/atributosSqs'
       payload:

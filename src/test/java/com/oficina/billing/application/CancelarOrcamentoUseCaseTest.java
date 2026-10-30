@@ -2,7 +2,6 @@ package com.oficina.billing.application;
 
 import com.oficina.billing.application.comando.ComandoCancelarOrcamento;
 import com.oficina.billing.application.comando.ResultadoComando;
-import com.oficina.billing.application.mensagem.ComandoRejeitado;
 import com.oficina.billing.application.mensagem.OrcamentoCancelado;
 import com.oficina.billing.application.port.MensagensProcessadas;
 import com.oficina.billing.application.port.PublicadorMensagens;
@@ -74,14 +73,15 @@ class CancelarOrcamentoUseCaseTest {
     }
 
     @Test
-    void semOrcamentoParaAOsRespondeComandoRejeitado() {
+    void semOrcamentoParaAOsRespondeOrcamentoCanceladoSemIdentificador() {
         var comando = comando(UUID.randomUUID());
         when(mensagensProcessadas.registrar(comando.mensagemId(), "CancelarOrcamento")).thenReturn(true);
         when(orcamentos.buscarPorOsId(comando.osId())).thenReturn(Optional.empty());
 
-        assertThat(useCase.executar(comando)).isEqualTo(ResultadoComando.REJEITADA);
+        assertThat(useCase.executar(comando)).isEqualTo(ResultadoComando.APLICADA);
 
-        verify(publicador).publicar(any(), any(ComandoRejeitado.class));
+        verify(publicador).publicar(comando.correlacao(), new OrcamentoCancelado(null, "pagamento recusado"));
+        verify(orcamentos, never()).salvar(any());
     }
 
     @Test

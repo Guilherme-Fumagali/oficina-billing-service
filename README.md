@@ -91,10 +91,12 @@ A saga da ordem de serviço é orquestrada pelo OS Service (ADR-017). O Billing 
 | Validade do orçamento | job de prazos (5 min) | marca `EXPIRADO` | `OrcamentoExpirado` | compensável |
 | Pagamento | webhook ou reconciliação (60 s) | consulta o pagamento no Mercado Pago e aplica o status | `PagamentoAprovado` ou `PagamentoRecusado` | pivô |
 | Prazo do pagamento | job de prazos (5 min) | reconcilia uma última vez e marca `EXPIRADO` | `PagamentoRecusado` com motivo `EXPIRADO` | compensável |
-| Compensação de pagamento recusado ou de falha na execução | `CancelarOrcamento` | cancela o orçamento (idempotente) | `OrcamentoCancelado` | compensação |
+| Compensação de pagamento recusado ou de falha na execução | `CancelarOrcamento` | cancela o orçamento, se existir (idempotente) | `OrcamentoCancelado` (`orcamentoId` nulo se a OS não tem orçamento) | compensação |
 | Compensação de falha na execução | `EstornarPagamento` | estorna no Mercado Pago o pagamento aprovado | `PagamentoEstornado` (valor zero se não havia pagamento aprovado) | compensação |
 
 Comandos repetidos com `mensagemId` novo (reenvio por prazo no orquestrador) produzem a mesma resposta de negócio: `GerarOrcamento` para uma OS que já tem orçamento publica `OrcamentoGerado` com os dados existentes, `CancelarOrcamento` sobre orçamento cancelado responde `OrcamentoCancelado` e `EstornarPagamento` sobre pagamento estornado repete `PagamentoEstornado`.
+
+As compensações são idempotentes e sempre respondidas com sucesso (SPEC-08 §5.3): `CancelarOrcamento` para uma OS sem orçamento responde `OrcamentoCancelado` com `orcamentoId` nulo e o `motivo` recebido, e `EstornarPagamento` sem pagamento aprovado responde `PagamentoEstornado` com valor zero. `ComandoRejeitado` fica restrito a comandos com dados malformados (`DADOS_INVALIDOS`).
 
 ## Mensagens
 
@@ -105,8 +107,8 @@ Contrato completo, com esquemas e exemplos: [`docs/asyncapi.yaml`](docs/asyncapi
 | Tipo | Dados | Resposta |
 |---|---|---|
 | `GerarOrcamento` | `clienteId`, `cliente{nome, email}`, `veiculo{placa, modelo}`, `itens[{tipo, referenciaId, descricao, quantidade, precoUnitario}]` | `OrcamentoGerado` ou `ComandoRejeitado` (`DADOS_INVALIDOS`) |
-| `CancelarOrcamento` | `motivo` | `OrcamentoCancelado` ou `ComandoRejeitado` (`ORCAMENTO_NAO_ENCONTRADO`) |
-| `EstornarPagamento` | `motivo` | `PagamentoEstornado` |
+| `CancelarOrcamento` | `motivo` | `OrcamentoCancelado` (`orcamentoId` nulo se a OS não tem orçamento) |
+| `EstornarPagamento` | `motivo` | `PagamentoEstornado` (valor zero se não há pagamento aprovado) |
 
 **Publicadas** em `oficina-<ambiente>-os-eventos`: `OrcamentoGerado`, `OrcamentoAprovado`, `OrcamentoReprovado`, `OrcamentoExpirado`, `OrcamentoCancelado`, `PagamentoAprovado`, `PagamentoRecusado`, `PagamentoEstornado` e `ComandoRejeitado`.
 
@@ -117,7 +119,7 @@ Garantias de entrega:
 | Transactional outbox | a mensagem é gravada na tabela `outbox` na mesma transação da mudança de estado; nenhum caso de uso chama a SQS |
 | Relay | `RelayOutbox` (a cada 500 ms) reivindica até 50 linhas com `SELECT … FOR UPDATE SKIP LOCKED`, envia com `SqsTemplate` e marca `publicada_em`; em falha incrementa `tentativas` e guarda `ultimo_erro` |
 | Consumidor idempotente | `INSERT … ON CONFLICT DO NOTHING` em `mensagens_processadas` no início da transação do efeito; duplicata exata é descartada sem erro |
-| Rejeição de negócio | resposta `ComandoRejeitado` e reconhecimento da mensagem, sem nova tentativa |
+| Dados malformados | resposta `ComandoRejeitado` com código `DADOS_INVALIDOS` e reconhecimento da mensagem, sem nova tentativa |
 | Falha técnica | exceção, a mensagem volta após a visibilidade de 30 s e vai para a DLQ após 5 recebimentos |
 | Tolerância a campos novos | `FAIL_ON_UNKNOWN_PROPERTIES` desligado no consumo |
 
@@ -350,9 +352,9 @@ Workflows em [`.github/workflows`](.github/workflows):
 | Unitário de aplicação | 10 | 59 | casos de uso com Mockito e unidade de trabalho imediata |
 | Unitário de infraestrutura | 11 | 50 | validador de assinatura com vetor HMAC conhecido, mapeamento de status do Mercado Pago, consumidor SQS, relay, monitor da DLQ, métricas, notificação, JWT, tratamento de erros, simulador |
 | Integração HTTP com WireMock | 1 | 13 | `MercadoPagoGateway`: preferência, consulta, busca, estorno, repetição em 5xx e tempo esgotado, ausência de repetição em 4xx, circuito aberto |
-| Integração com Testcontainers | 3 | 24 | Spring completo com PostgreSQL (`postgres:16-alpine`), SQS no LocalStack (`localstack/localstack:3`) e Mercado Pago no WireMock |
+| Integração com Testcontainers | 3 | 25 | Spring completo com PostgreSQL (`postgres:16-alpine`), SQS no LocalStack (`localstack/localstack:3`) e Mercado Pago no WireMock |
 
-São 184 casos. Os testes de integração cobrem: comando `GerarOrcamento` na fila até `OrcamentoGerado` em `os-eventos`; duplicata descartada e comando repetido respondendo o mesmo orçamento; `ComandoRejeitado`; aprovação até `OrcamentoAprovado`; decisão pelo link do e-mail; webhook assinado até `PagamentoAprovado`; webhook sem assinatura recusado; `EstornarPagamento` chamando o refund; expiração; reconciliação; `SKIP LOCKED` entre réplicas; leitura da DLQ; contrato OpenAPI.
+São 185 casos. Os testes de integração cobrem: comando `GerarOrcamento` na fila até `OrcamentoGerado` em `os-eventos`; duplicata descartada e comando repetido respondendo o mesmo orçamento; `ComandoRejeitado` para dados inválidos; cancelamento de OS sem orçamento; aprovação até `OrcamentoAprovado`; decisão pelo link do e-mail; webhook assinado até `PagamentoAprovado`; webhook sem assinatura recusado; `EstornarPagamento` chamando o refund; expiração; reconciliação; `SKIP LOCKED` entre réplicas; leitura da DLQ; contrato OpenAPI.
 
 ```bash
 ./mvnw test      # requer Docker para o Testcontainers

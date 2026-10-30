@@ -3,34 +3,19 @@ id: urn:oficina:billing-service
 info:
   title: Oficina Mecânica — Billing Service (mensagens)
   version: 1.0.0
-  description: |
-    Contrato assíncrono do Billing Service, derivado da SPEC-08. O serviço consome comandos do
-    orquestrador da saga (OS Service) na fila `billing-comandos` e responde com eventos na fila
-    `os-eventos`. Toda mensagem usa o mesmo envelope JSON; os atributos SQS `tipo` e `versao`
-    repetem os campos do envelope, e os atributos `newrelic`, `traceparent` e `tracestate`
-    transportam o contexto de rastreamento distribuído.
-
-    Regras de consumo: a mensagem é descartada se o `mensagemId` já foi processado; comandos são
-    idempotentes por `osId`; as compensações `CancelarOrcamento` e `EstornarPagamento` sempre
-    recebem resposta de sucesso, mesmo quando não há orçamento ou pagamento aprovado; comando com
-    dados malformados recebe `ComandoRejeitado` (`DADOS_INVALIDOS`) e é reconhecido; falha técnica
-    devolve a mensagem à fila e, após 5 recebimentos, ela vai para a DLQ.
-  license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0
+  description: Contrato assíncrono do Billing Service (SPEC-08); comandos em billing-comandos, respostas em os-eventos.
+  license: { name: Apache 2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
 defaultContentType: application/json
 servers:
   aws:
     url: https://sqs.us-east-1.amazonaws.com
     protocol: sqs
-    description: Amazon SQS na conta do projeto (filas padrão com SSE-SQS e DLQ).
   local:
     url: http://localhost:4566
     protocol: sqs
-    description: LocalStack 3 do docker-compose (ambiente `local`).
 channels:
   oficina-{ambiente}-billing-comandos:
-    description: Comandos enviados pelo orquestrador da saga ao Billing Service.
+    description: Comandos do orquestrador da saga; após 5 recebimentos a mensagem vai para a DLQ.
     parameters:
       ambiente:
         $ref: '#/components/parameters/ambiente'
@@ -39,16 +24,10 @@ channels:
         queue:
           name: oficina-{ambiente}-billing-comandos
           fifoQueue: false
-          visibilityTimeout: 30
-          receiveMessageWaitTime: 20
-          messageRetentionPeriod: 345600
           redrivePolicy:
             deadLetterQueue:
               name: oficina-{ambiente}-billing-comandos-dlq
             maxReceiveCount: 5
-        deadLetterQueue:
-          name: oficina-{ambiente}-billing-comandos-dlq
-          messageRetentionPeriod: 1209600
         bindingVersion: 0.2.0
     publish:
       operationId: receberComando
@@ -86,7 +65,6 @@ channels:
 components:
   parameters:
     ambiente:
-      description: Ambiente lógico da fila.
       schema:
         type: string
         enum: [local, staging, prod]
@@ -96,80 +74,50 @@ components:
         type: object
         required: [tipo, versao]
         properties:
-          tipo:
-            type: string
-            description: Repete o campo `tipo` do envelope.
-          versao:
-            type: string
-            description: Repete o campo `versao` do envelope.
-          newrelic:
-            type: string
-          traceparent:
-            type: string
-          tracestate:
-            type: string
+          tipo: { type: string }
+          versao: { type: string }
+          newrelic: { type: string }
+          traceparent: { type: string }
+          tracestate: { type: string }
   schemas:
-    Uuid:
-      type: string
-      format: uuid
-    Instante:
-      type: string
-      format: date-time
-      description: Instante UTC em ISO-8601 terminado em Z.
-    Dinheiro:
-      type: number
-      multipleOf: 0.01
-      description: Valor em reais com duas casas decimais.
+    Uuid: { type: string, format: uuid }
+    UuidOuNulo:
+      oneOf:
+        - $ref: '#/components/schemas/Uuid'
+        - type: 'null'
+    Instante: { type: string, format: date-time }
+    Dinheiro: { type: number, multipleOf: 0.01 }
+    Canal: { type: string, enum: [CLIENTE, LINK, BALCAO] }
     Envelope:
       type: object
       required: [mensagemId, tipo, versao, sagaId, osId, origem, ocorridoEm, dados]
       properties:
-        mensagemId:
-          $ref: '#/components/schemas/Uuid'
-        tipo:
-          type: string
-        versao:
-          type: integer
-          minimum: 1
-        sagaId:
-          $ref: '#/components/schemas/Uuid'
-        osId:
-          $ref: '#/components/schemas/Uuid'
-        causadaPor:
-          oneOf:
-            - $ref: '#/components/schemas/Uuid'
-            - type: 'null'
-          description: mensagemId do comando que originou a resposta; nulo em eventos disparados por pessoa ou por job.
-        origem:
-          type: string
-          enum: [os-service, billing-service, execution-service]
-        ocorridoEm:
-          $ref: '#/components/schemas/Instante'
-        dados:
-          type: object
+        mensagemId: { $ref: '#/components/schemas/Uuid' }
+        tipo: { type: string }
+        versao: { type: integer, minimum: 1 }
+        sagaId: { $ref: '#/components/schemas/Uuid' }
+        osId: { $ref: '#/components/schemas/Uuid' }
+        causadaPor: { $ref: '#/components/schemas/UuidOuNulo' }
+        origem: { type: string, enum: [os-service, billing-service, execution-service] }
+        ocorridoEm: { $ref: '#/components/schemas/Instante' }
+        dados: { type: object }
     DadosGerarOrcamento:
       type: object
       required: [clienteId, cliente, veiculo, itens]
       properties:
-        clienteId:
-          $ref: '#/components/schemas/Uuid'
+        clienteId: { $ref: '#/components/schemas/Uuid' }
         cliente:
           type: object
           required: [nome, email]
           properties:
-            nome:
-              type: string
-            email:
-              type: string
-              format: email
+            nome: { type: string }
+            email: { type: string, format: email }
         veiculo:
           type: object
           required: [placa, modelo]
           properties:
-            placa:
-              type: string
-            modelo:
-              type: string
+            placa: { type: string }
+            modelo: { type: string }
         itens:
           type: array
           minItems: 1
@@ -177,584 +125,126 @@ components:
             type: object
             required: [tipo, referenciaId, descricao, quantidade, precoUnitario]
             properties:
-              tipo:
-                type: string
-                enum: [SERVICO, PECA]
-              referenciaId:
-                $ref: '#/components/schemas/Uuid'
-              descricao:
-                type: string
-              quantidade:
-                type: integer
-                minimum: 1
-              precoUnitario:
-                $ref: '#/components/schemas/Dinheiro'
+              tipo: { type: string, enum: [SERVICO, PECA] }
+              referenciaId: { $ref: '#/components/schemas/Uuid' }
+              descricao: { type: string }
+              quantidade: { type: integer, minimum: 1 }
+              precoUnitario: { $ref: '#/components/schemas/Dinheiro' }
     DadosMotivo:
       type: object
       properties:
-        motivo:
-          type: string
+        motivo: { type: string }
     DadosOrcamentoGerado:
       type: object
       required: [orcamentoId, total, validoAte]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        total:
-          $ref: '#/components/schemas/Dinheiro'
-        validoAte:
-          $ref: '#/components/schemas/Instante'
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        total: { $ref: '#/components/schemas/Dinheiro' }
+        validoAte: { $ref: '#/components/schemas/Instante' }
     DadosOrcamentoAprovado:
       type: object
       required: [orcamentoId, aprovadoEm, canal, linkPagamento]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        aprovadoEm:
-          $ref: '#/components/schemas/Instante'
-        canal:
-          type: string
-          enum: [CLIENTE, LINK, BALCAO]
-        linkPagamento:
-          type: string
-          format: uri
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        aprovadoEm: { $ref: '#/components/schemas/Instante' }
+        canal: { $ref: '#/components/schemas/Canal' }
+        linkPagamento: { type: string, format: uri }
     DadosOrcamentoReprovado:
       type: object
       required: [orcamentoId, reprovadoEm, canal]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        reprovadoEm:
-          $ref: '#/components/schemas/Instante'
-        canal:
-          type: string
-          enum: [CLIENTE, LINK, BALCAO]
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        reprovadoEm: { $ref: '#/components/schemas/Instante' }
+        canal: { $ref: '#/components/schemas/Canal' }
     DadosOrcamentoExpirado:
       type: object
       required: [orcamentoId, expiradoEm]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        expiradoEm:
-          $ref: '#/components/schemas/Instante'
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        expiradoEm: { $ref: '#/components/schemas/Instante' }
     DadosOrcamentoCancelado:
       type: object
       required: [orcamentoId]
       properties:
-        orcamentoId:
-          description: Nulo quando a OS não tem orçamento; a compensação é respondida mesmo assim.
-          oneOf:
-            - $ref: '#/components/schemas/Uuid'
-            - type: 'null'
-        motivo:
-          type: string
+        orcamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        motivo: { type: string }
     DadosPagamentoAprovado:
       type: object
       required: [orcamentoId, pagamentoId, valor, aprovadoEm]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        pagamentoId:
-          $ref: '#/components/schemas/Uuid'
-        valor:
-          $ref: '#/components/schemas/Dinheiro'
-        aprovadoEm:
-          $ref: '#/components/schemas/Instante'
-        meio:
-          type: string
-          description: payment_method_id do Mercado Pago (por exemplo master, visa, pix).
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        pagamentoId: { $ref: '#/components/schemas/Uuid' }
+        valor: { $ref: '#/components/schemas/Dinheiro' }
+        aprovadoEm: { $ref: '#/components/schemas/Instante' }
+        meio: { type: string }
     DadosPagamentoRecusado:
       type: object
       required: [orcamentoId, pagamentoId, motivo]
       properties:
-        orcamentoId:
-          $ref: '#/components/schemas/Uuid'
-        pagamentoId:
-          $ref: '#/components/schemas/Uuid'
-        motivo:
-          type: string
-          description: status_detail do Mercado Pago ou EXPIRADO quando o prazo de pagamento terminou.
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        pagamentoId: { $ref: '#/components/schemas/Uuid' }
+        motivo: { type: string }
     DadosPagamentoEstornado:
       type: object
       required: [valor, estornadoEm]
       properties:
-        orcamentoId:
-          oneOf:
-            - $ref: '#/components/schemas/Uuid'
-            - type: 'null'
-        pagamentoId:
-          oneOf:
-            - $ref: '#/components/schemas/Uuid'
-            - type: 'null'
-        valor:
-          description: Zero quando não havia pagamento aprovado.
-          allOf:
-            - $ref: '#/components/schemas/Dinheiro'
-        estornadoEm:
-          $ref: '#/components/schemas/Instante'
+        orcamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        pagamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        valor: { $ref: '#/components/schemas/Dinheiro' }
+        estornadoEm: { $ref: '#/components/schemas/Instante' }
     DadosComandoRejeitado:
       type: object
       required: [comando, motivo, codigo]
       properties:
-        comando:
-          type: string
-          enum: [GerarOrcamento, CancelarOrcamento, EstornarPagamento]
-        motivo:
-          type: string
-        codigo:
-          type: string
-          enum: [DADOS_INVALIDOS]
+        comando: { type: string, enum: [GerarOrcamento, CancelarOrcamento, EstornarPagamento] }
+        motivo: { type: string }
+        codigo: { type: string, enum: [DADOS_INVALIDOS] }
   messages:
     GerarOrcamento:
       name: GerarOrcamento
-      title: Gerar orçamento
-      summary: Snapshot dos itens da OS para o Billing criar o orçamento e enviar o e-mail de decisão.
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: GerarOrcamento
-              dados:
-                $ref: '#/components/schemas/DadosGerarOrcamento'
-      examples:
-        - name: gerarOrcamento
-          headers:
-            tipo: GerarOrcamento
-            versao: '1'
-          payload:
-            mensagemId: 0d6f6f0e-8b0a-4d39-9a4e-9c8a5f3a1b11
-            tipo: GerarOrcamento
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: os-service
-            ocorridoEm: '2026-10-30T14:05:11.482Z'
-            dados:
-              clienteId: 1b4e28ba-2fa1-41d2-883f-0016d3cca427
-              cliente:
-                nome: Maria Souza
-                email: maria@example.com
-              veiculo:
-                placa: ABC1D23
-                modelo: Corolla
-              itens:
-                - tipo: SERVICO
-                  referenciaId: 6f1a2b3c-4d5e-4f60-8a7b-9c0d1e2f3a4b
-                  descricao: Troca de óleo
-                  quantidade: 1
-                  precoUnitario: 120.00
-                - tipo: PECA
-                  referenciaId: 7a2b3c4d-5e6f-4a70-9b8c-0d1e2f3a4b5c
-                  descricao: Filtro de óleo
-                  quantidade: 2
-                  precoUnitario: 45.00
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosGerarOrcamento' } } }] }
     CancelarOrcamento:
       name: CancelarOrcamento
-      title: Cancelar orçamento
-      summary: Compensação da saga; idempotente e sempre respondida com OrcamentoCancelado, com orcamentoId nulo quando a OS não tem orçamento.
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: CancelarOrcamento
-              dados:
-                $ref: '#/components/schemas/DadosMotivo'
-      examples:
-        - name: cancelarOrcamento
-          headers:
-            tipo: CancelarOrcamento
-            versao: '1'
-          payload:
-            mensagemId: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
-            tipo: CancelarOrcamento
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: os-service
-            ocorridoEm: '2026-10-31T09:00:00Z'
-            dados:
-              motivo: PAGAMENTO_RECUSADO
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosMotivo' } } }] }
     EstornarPagamento:
       name: EstornarPagamento
-      title: Estornar pagamento
-      summary: Compensação da saga; estorna o pagamento aprovado no Mercado Pago ou responde valor zero.
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: EstornarPagamento
-              dados:
-                $ref: '#/components/schemas/DadosMotivo'
-      examples:
-        - name: estornarPagamento
-          headers:
-            tipo: EstornarPagamento
-            versao: '1'
-          payload:
-            mensagemId: 3c2b1a09-8f7e-4d6c-9b5a-4f3e2d1c0b9a
-            tipo: EstornarPagamento
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: os-service
-            ocorridoEm: '2026-10-31T16:30:00Z'
-            dados:
-              motivo: FALHA_EXECUCAO
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosMotivo' } } }] }
     OrcamentoGerado:
       name: OrcamentoGerado
-      title: Orçamento gerado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: OrcamentoGerado
-              dados:
-                $ref: '#/components/schemas/DadosOrcamentoGerado'
-      examples:
-        - name: orcamentoGerado
-          headers:
-            tipo: OrcamentoGerado
-            versao: '1'
-          payload:
-            mensagemId: 5b6c7d8e-9f0a-4b1c-8d2e-3f4a5b6c7d8e
-            tipo: OrcamentoGerado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: 0d6f6f0e-8b0a-4d39-9a4e-9c8a5f3a1b11
-            origem: billing-service
-            ocorridoEm: '2026-10-30T14:05:12.031Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              total: 210.00
-              validoAte: '2026-11-06T14:05:12.031Z'
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoGerado' } } }] }
     OrcamentoAprovado:
       name: OrcamentoAprovado
-      title: Orçamento aprovado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: OrcamentoAprovado
-              dados:
-                $ref: '#/components/schemas/DadosOrcamentoAprovado'
-      examples:
-        - name: orcamentoAprovado
-          headers:
-            tipo: OrcamentoAprovado
-            versao: '1'
-          payload:
-            mensagemId: 6c7d8e9f-0a1b-4c2d-9e3f-4a5b6c7d8e9f
-            tipo: OrcamentoAprovado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-10-30T15:20:00Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              aprovadoEm: '2026-10-30T15:20:00Z'
-              canal: LINK
-              linkPagamento: https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=123456789-abcd
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoAprovado' } } }] }
     OrcamentoReprovado:
       name: OrcamentoReprovado
-      title: Orçamento reprovado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: OrcamentoReprovado
-              dados:
-                $ref: '#/components/schemas/DadosOrcamentoReprovado'
-      examples:
-        - name: orcamentoReprovado
-          headers:
-            tipo: OrcamentoReprovado
-            versao: '1'
-          payload:
-            mensagemId: 7d8e9f0a-1b2c-4d3e-8f4a-5b6c7d8e9f0a
-            tipo: OrcamentoReprovado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-10-30T15:20:00Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              reprovadoEm: '2026-10-30T15:20:00Z'
-              canal: CLIENTE
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoReprovado' } } }] }
     OrcamentoExpirado:
       name: OrcamentoExpirado
-      title: Orçamento expirado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: OrcamentoExpirado
-              dados:
-                $ref: '#/components/schemas/DadosOrcamentoExpirado'
-      examples:
-        - name: orcamentoExpirado
-          headers:
-            tipo: OrcamentoExpirado
-            versao: '1'
-          payload:
-            mensagemId: 8e9f0a1b-2c3d-4e4f-9a5b-6c7d8e9f0a1b
-            tipo: OrcamentoExpirado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-11-06T14:10:00Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              expiradoEm: '2026-11-06T14:10:00Z'
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoExpirado' } } }] }
     OrcamentoCancelado:
       name: OrcamentoCancelado
-      title: Orçamento cancelado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: OrcamentoCancelado
-              dados:
-                $ref: '#/components/schemas/DadosOrcamentoCancelado'
-      examples:
-        - name: orcamentoCancelado
-          headers:
-            tipo: OrcamentoCancelado
-            versao: '1'
-          payload:
-            mensagemId: 9f0a1b2c-3d4e-4f5a-8b6c-7d8e9f0a1b2c
-            tipo: OrcamentoCancelado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: 9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d
-            origem: billing-service
-            ocorridoEm: '2026-10-31T09:00:01Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              motivo: PAGAMENTO_RECUSADO
-        - name: osSemOrcamento
-          headers:
-            tipo: OrcamentoCancelado
-            versao: '1'
-          payload:
-            mensagemId: 6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e
-            tipo: OrcamentoCancelado
-            versao: 1
-            sagaId: 8a2d3f1b-2e6c-4d8f-9b62-4a1f3b0c7d55
-            osId: d4b2e9b3-6f9a-4c4b-8e2d-3c8f7a5b0f21
-            causadaPor: 7e6d5c4b-3a29-4180-9f7e-6d5c4b3a2918
-            origem: billing-service
-            ocorridoEm: '2026-10-31T09:00:01Z'
-            dados:
-              orcamentoId: null
-              motivo: REJEICAO
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoCancelado' } } }] }
     PagamentoAprovado:
       name: PagamentoAprovado
-      title: Pagamento aprovado
-      summary: Disparado pelo webhook ou pela reconciliação, sempre após consulta autenticada ao Mercado Pago.
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: PagamentoAprovado
-              dados:
-                $ref: '#/components/schemas/DadosPagamentoAprovado'
-      examples:
-        - name: pagamentoAprovado
-          headers:
-            tipo: PagamentoAprovado
-            versao: '1'
-          payload:
-            mensagemId: 0a1b2c3d-4e5f-4a6b-9c7d-8e9f0a1b2c3d
-            tipo: PagamentoAprovado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-10-30T15:31:02Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              pagamentoId: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
-              valor: 210.00
-              aprovadoEm: '2026-10-30T15:30:58Z'
-              meio: master
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoAprovado' } } }] }
     PagamentoRecusado:
       name: PagamentoRecusado
-      title: Pagamento recusado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: PagamentoRecusado
-              dados:
-                $ref: '#/components/schemas/DadosPagamentoRecusado'
-      examples:
-        - name: pagamentoRecusadoPeloEmissor
-          headers:
-            tipo: PagamentoRecusado
-            versao: '1'
-          payload:
-            mensagemId: 1b2c3d4e-5f6a-4b7c-8d8e-9f0a1b2c3d4e
-            tipo: PagamentoRecusado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-10-30T15:31:02Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              pagamentoId: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
-              motivo: cc_rejected_other_reason
-        - name: pagamentoRecusadoPorPrazo
-          headers:
-            tipo: PagamentoRecusado
-            versao: '1'
-          payload:
-            mensagemId: 2c3d4e5f-6a7b-4c8d-9e9f-0a1b2c3d4e5f
-            tipo: PagamentoRecusado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: null
-            origem: billing-service
-            ocorridoEm: '2026-10-31T15:25:00Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              pagamentoId: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
-              motivo: EXPIRADO
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoRecusado' } } }] }
     PagamentoEstornado:
       name: PagamentoEstornado
-      title: Pagamento estornado
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: PagamentoEstornado
-              dados:
-                $ref: '#/components/schemas/DadosPagamentoEstornado'
-      examples:
-        - name: pagamentoEstornado
-          headers:
-            tipo: PagamentoEstornado
-            versao: '1'
-          payload:
-            mensagemId: 3d4e5f6a-7b8c-4d9e-8f0a-1b2c3d4e5f6a
-            tipo: PagamentoEstornado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: 3c2b1a09-8f7e-4d6c-9b5a-4f3e2d1c0b9a
-            origem: billing-service
-            ocorridoEm: '2026-10-31T16:30:02Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              pagamentoId: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
-              valor: 210.00
-              estornadoEm: '2026-10-31T16:30:02Z'
-        - name: semPagamentoAprovado
-          headers:
-            tipo: PagamentoEstornado
-            versao: '1'
-          payload:
-            mensagemId: 4e5f6a7b-8c9d-4e0f-9a1b-2c3d4e5f6a7b
-            tipo: PagamentoEstornado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: 3c2b1a09-8f7e-4d6c-9b5a-4f3e2d1c0b9a
-            origem: billing-service
-            ocorridoEm: '2026-10-31T16:30:02Z'
-            dados:
-              orcamentoId: 5d2f1a60-0c1e-4b8e-9a4f-4f7e2c0f9a11
-              pagamentoId: null
-              valor: 0.00
-              estornadoEm: '2026-10-31T16:30:02Z'
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoEstornado' } } }] }
     ComandoRejeitado:
       name: ComandoRejeitado
-      title: Comando rejeitado
-      summary: Comando com dados malformados (DADOS_INVALIDOS); a mensagem de comando é reconhecida e não volta para a fila.
-      traits:
-        - $ref: '#/components/messageTraits/atributosSqs'
-      payload:
-        allOf:
-          - $ref: '#/components/schemas/Envelope'
-          - type: object
-            properties:
-              tipo:
-                const: ComandoRejeitado
-              dados:
-                $ref: '#/components/schemas/DadosComandoRejeitado'
-      examples:
-        - name: comandoRejeitado
-          headers:
-            tipo: ComandoRejeitado
-            versao: '1'
-          payload:
-            mensagemId: 5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b8c
-            tipo: ComandoRejeitado
-            versao: 1
-            sagaId: 7f1c2e0a-1d5b-4c7e-8a51-3f0e2a9b6c44
-            osId: c3a1d8a2-5e8f-4b3a-9d1c-2b7e6f4a9e10
-            causadaPor: 0d6f6f0e-8b0a-4d39-9a4e-9c8a5f3a1b11
-            origem: billing-service
-            ocorridoEm: '2026-10-30T14:05:12Z'
-            dados:
-              comando: GerarOrcamento
-              motivo: O orçamento deve ter ao menos um item.
-              codigo: DADOS_INVALIDOS
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosComandoRejeitado' } } }] }

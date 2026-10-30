@@ -22,7 +22,6 @@ Serviço de orçamento e pagamento do sistema de gestão de oficina mecânica, d
 |---|---|
 | Contrato OpenAPI | [`docs/openapi.json`](docs/openapi.json), visualizável no [Redoc](https://redocly.github.io/redoc/?url=https://raw.githubusercontent.com/Guilherme-Fumagali/oficina-billing-service/develop/docs/openapi.json) |
 | Contrato de mensagens (AsyncAPI 2.6) | [`docs/asyncapi.yaml`](docs/asyncapi.yaml) |
-| Coleção Postman | [`docs/postman/billing.postman_collection.json`](docs/postman/billing.postman_collection.json) |
 | Preparação da conta do Mercado Pago | [`docs/mercado-pago.md`](docs/mercado-pago.md) |
 | Swagger UI | `http://localhost:8081/swagger-ui.html` na execução local |
 | Documentação de arquitetura da fase (ADRs, SPECs, diagramas) | [`tech-challenge-1/docs/tech-challenge-4`](https://github.com/Guilherme-Fumagali/tech-challenge-1/tree/develop/docs/tech-challenge-4) |
@@ -100,7 +99,7 @@ As compensações são idempotentes e sempre respondidas com sucesso (SPEC-08 §
 
 ## Mensagens
 
-Contrato completo, com esquemas e exemplos: [`docs/asyncapi.yaml`](docs/asyncapi.yaml), derivado da SPEC-08. Todas as mensagens usam o envelope `mensagemId`, `tipo`, `versao`, `sagaId`, `osId`, `causadaPor`, `origem`, `ocorridoEm`, `dados`; valores monetários têm duas casas decimais e datas são ISO-8601 em UTC.
+Contrato completo, com os esquemas: [`docs/asyncapi.yaml`](docs/asyncapi.yaml), derivado da SPEC-08. Todas as mensagens usam o envelope `mensagemId`, `tipo`, `versao`, `sagaId`, `osId`, `causadaPor`, `origem`, `ocorridoEm`, `dados`; valores monetários têm duas casas decimais e datas são ISO-8601 em UTC.
 
 **Consumidas** em `oficina-<ambiente>-billing-comandos`:
 
@@ -440,7 +439,7 @@ As condições de alerta (DLQ com mensagens, falhas na integração com o Mercad
 ├── src/main/java/com/oficina/billing/     domain, application e infrastructure
 ├── src/main/resources/db/migration/       migration Flyway V1
 ├── src/test/                              testes unitários, WireMock e integração
-├── docs/                                  OpenAPI, AsyncAPI, coleção Postman e roteiro do Mercado Pago
+├── docs/                                  OpenAPI, AsyncAPI e roteiro do Mercado Pago
 ├── infra/                                 Terraform do RDS, da fila, da role do pod e dos parâmetros SSM
 ├── k8s/                                   manifestos Kustomize (base e overlays staging e prod)
 ├── localstack/init/ready.d/               criação das filas no LocalStack

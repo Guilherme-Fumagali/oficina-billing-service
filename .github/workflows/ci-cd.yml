@@ -48,6 +48,9 @@ jobs:
     name: SonarCloud
     needs: build-and-test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -63,8 +66,22 @@ jobs:
       - name: Analyze
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B verify sonar:sonar
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            ./mvnw -B verify sonar:sonar
+            exit 0
+          fi
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open \
+            --json number,baseRefName --jq '.[0] | select(.) | "\(.number) \(.baseRefName)"')
+          if [ -z "$pr" ]; then
+            echo "SonarCloud: sem pull request aberto para $GITHUB_REF_NAME; a análise roda no pull request e na main." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          read -r numero base <<< "$pr"
+          ./mvnw -B verify sonar:sonar -Dsonar.pullrequest.key="$numero" \
+            -Dsonar.pullrequest.branch="$GITHUB_REF_NAME" -Dsonar.pullrequest.base="$base"
 
   build-and-push-image:
     name: Build & push no ECR

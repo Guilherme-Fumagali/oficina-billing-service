@@ -328,7 +328,7 @@ Workflows em [`.github/workflows`](.github/workflows):
 | Workflow e job | Quando executa | O que faz |
 |---|---|---|
 | `ci-cd.yml` · **Build & Test** | todo push, em qualquer branch, e todo pull request | `./mvnw -B verify`: compila, executa **todos os testes** (unitários, WireMock e integração com Testcontainers), confere o contrato `docs/openapi.json`, aplica os limites do JaCoCo, publica o relatório como artefato e resume a cobertura no job |
-| `ci-cd.yml` · **SonarCloud** | pull request e push em `develop` ou `main` | análise estática e cobertura; o quality gate é aguardado (`sonar.qualitygate.wait=true`) e reprova o job |
+| `ci-cd.yml` · **SonarCloud** | todo push; analisa a branch como pull request quando há PR aberto, e a `main` | análise estática e cobertura; o quality gate é aguardado (`sonar.qualitygate.wait=true`) e reprova o job |
 | `ci-cd.yml` · **Build & push no ECR** | push em `develop` ou `main`, depois dos dois anteriores | imagem com tags `<sha>` e `latest` no ECR do ambiente (`/oficina/<ambiente>/billing/ecr-repository-url`); se o ECR não existir, termina com aviso |
 | `ci-cd.yml` · **Conferir cluster** | imagem publicada | verifica se o cluster do ambiente existe |
 | `ci-cd.yml` · **Deploy no EKS** | cluster existente | cria o Secret `billing-service-secrets` a partir do SSM, fixa a imagem com `kustomize edit set image`, aplica o overlay, aguarda o rollout e faz smoke test em `/actuator/health/readiness` e `/actuator/info`; em produção, aguarda aprovação |

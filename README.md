@@ -193,7 +193,7 @@ Alternativas descartadas:
 
 ## Integração com o Mercado Pago
 
-Checkout Pro com webhook assinado e reconciliação por consulta (ADR-021). O roteiro de preparação da conta, das credenciais e dos secrets está em [`docs/mercado-pago.md`](docs/mercado-pago.md).
+Checkout Pro com webhook assinado e reconciliação por consulta ([ADR-021](https://github.com/Guilherme-Fumagali/tech-challenge-1/blob/develop/docs/tech-challenge-4/adrs/ADR-021-mercado-pago-checkout-pro.md)). O roteiro de preparação da conta, das credenciais e dos secrets está em [`docs/mercado-pago.md`](docs/mercado-pago.md).
 
 ```mermaid
 sequenceDiagram

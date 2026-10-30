@@ -2,10 +2,7 @@ name: Infra
 
 on:
   push:
-    paths:
-      - 'infra/**'
-      - '.github/workflows/infra.yml'
-  pull_request:
+    branches: ['**']
   workflow_dispatch:
     inputs:
       acao:

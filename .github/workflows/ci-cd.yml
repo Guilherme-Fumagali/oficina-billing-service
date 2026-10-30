@@ -3,7 +3,6 @@ name: CI/CD
 on:
   push:
     branches: ['**']
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -48,7 +47,6 @@ jobs:
   sonar:
     name: SonarCloud
     needs: build-and-test
-    if: github.event_name == 'pull_request' || contains(fromJSON('["main", "develop"]'), github.ref_name)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

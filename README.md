@@ -291,7 +291,7 @@ docker compose up -d db localstack mailhog
 | `MP_WEBHOOK_SECRET` | — | Assinatura secreta do webhook |
 | `MP_EXIGIR_ASSINATURA` | `true` (`false` no perfil `local`) | Recusa webhooks sem assinatura válida |
 | `MP_USAR_SANDBOX_INIT_POINT` | `false` | Usa o `sandbox_init_point` no link de pagamento |
-| `MP_EMAIL_PAGADOR_TESTE` | — | E-mail do comprador de teste enviado em `payer.email` |
+| `MP_EMAIL_PAGADOR_TESTE` | — | E-mail do comprador de teste enviado em `payer.email`; em homologação vem da variável do GitHub de mesmo nome, em produção fica vazio |
 | `ORCAMENTO_VALIDADE_HORAS` | `168` | Validade do orçamento e do link de decisão |
 | `PAGAMENTO_PRAZO_HORAS` | `24` | Prazo do pagamento |
 | `PAGAMENTO_RECUSA_ENCERRA` | `true` | A primeira recusa encerra o pagamento |

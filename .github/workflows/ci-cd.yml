@@ -199,6 +199,8 @@ jobs:
         run: aws eks update-kubeconfig --name "$CLUSTER" --region us-east-1
 
       - name: Criar Secret do serviço a partir do SSM
+        env:
+          MP_EMAIL_PAGADOR_TESTE: ${{ env.AMBIENTE == 'staging' && vars.MP_EMAIL_PAGADOR_TESTE || '' }}
         run: |
           set -euo pipefail
           ler() {
@@ -225,6 +227,7 @@ jobs:
             --from-literal=MP_ACCESS_TOKEN="$MP_ACCESS_TOKEN" \
             --from-literal=MP_WEBHOOK_SECRET="$MP_WEBHOOK_SECRET" \
             --from-literal=APP_URL_PUBLICA="$APP_URL_PUBLICA" \
+            --from-literal=MP_EMAIL_PAGADOR_TESTE="$MP_EMAIL_PAGADOR_TESTE" \
             --from-literal=NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY" \
             --dry-run=client -o yaml | kubectl apply -f -
 

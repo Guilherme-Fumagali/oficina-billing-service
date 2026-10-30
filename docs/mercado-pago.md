@@ -61,6 +61,12 @@ Os secrets seguem este caminho:
 
 Os valores não aparecem no código, nos manifestos nem nos logs.
 
+Além dos secrets, criar a **variável** `MP_EMAIL_PAGADOR_TESTE` com o e-mail do comprador de teste (seção 3). O deploy de homologação a coloca no Secret do serviço e o Billing a envia em `payer.email`, o que evita misturar usuário real e de teste na mesma cobrança. Em produção o valor fica vazio e vale o e-mail do cliente.
+
+```bash
+gh variable set MP_EMAIL_PAGADOR_TESTE --repo Guilherme-Fumagali/oficina-billing-service --body "<e-mail do comprador de teste>"
+```
+
 ## 7. Como o serviço usa o Mercado Pago
 
 | Etapa | Chamada |

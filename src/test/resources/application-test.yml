@@ -1,0 +1,44 @@
+jwt:
+  secret: chave-de-teste-super-longa-para-hmac-sha-256-minimo-32-chars
+
+spring:
+  cloud:
+    aws:
+      credentials:
+        access-key: test
+        secret-key: test
+
+management:
+  otlp:
+    metrics:
+      export:
+        enabled: false
+
+app:
+  url-publica: http://billing.teste
+  mercado-pago:
+    access-token: token-de-teste
+    webhook-secret: segredo-webhook-de-teste
+    exigir-assinatura: true
+  orcamento:
+    expiracao:
+      atraso-inicial: 86400000
+  pagamento:
+    reconciliacao:
+      atraso-inicial: 86400000
+  mensageria:
+    relay:
+      intervalo: 200
+    dlq-monitor:
+      atraso-inicial: 86400000
+
+resilience4j:
+  retry:
+    instances:
+      mercadoPago:
+        wait-duration: 10ms
+  circuitbreaker:
+    instances:
+      mercadoPago:
+        minimum-number-of-calls: 50
+        sliding-window-size: 50

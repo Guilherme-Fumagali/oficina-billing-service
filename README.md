@@ -84,15 +84,15 @@ Os casos de uso são classes Java sem anotações de framework, instanciadas em 
 
 A saga da ordem de serviço é orquestrada pelo OS Service (ADR-017). O Billing Service é participante: recebe comandos, executa a transação local e responde com eventos. As respostas carregam o `sagaId` do comando e, quando há comando de origem, o `mensagemId` dele em `causadaPor`.
 
-| Passo da saga | Billing recebe ou detecta | Billing faz | Billing publica | Classificação |
-|---|---|---|---|---|
-| Diagnóstico concluído com itens | `GerarOrcamento` | cria o orçamento com token de decisão e envia o e-mail com itens, total, validade e links | `OrcamentoGerado` ou `ComandoRejeitado` | compensável |
-| Decisão do cliente | aprovação ou reprovação (API ou link do e-mail) | na aprovação, cria a cobrança no Mercado Pago e o pagamento `PENDENTE` | `OrcamentoAprovado` com o link de pagamento, ou `OrcamentoReprovado` | compensável |
-| Validade do orçamento | job de prazos (5 min) | marca `EXPIRADO` | `OrcamentoExpirado` | compensável |
-| Pagamento | webhook ou reconciliação (60 s) | consulta o pagamento no Mercado Pago e aplica o status | `PagamentoAprovado` ou `PagamentoRecusado` | pivô |
-| Prazo do pagamento | job de prazos (5 min) | reconcilia uma última vez e marca `EXPIRADO` | `PagamentoRecusado` com motivo `EXPIRADO` | compensável |
-| Compensação de pagamento recusado ou de falha na execução | `CancelarOrcamento` | cancela o orçamento, se existir (idempotente) | `OrcamentoCancelado` (`orcamentoId` nulo se a OS não tem orçamento) | compensação |
-| Compensação de falha na execução | `EstornarPagamento` | estorna no Mercado Pago o pagamento aprovado | `PagamentoEstornado` (valor zero se não havia pagamento aprovado) | compensação |
+| Passo da saga | Billing recebe ou detecta | Billing faz | Billing publica |
+|---|---|---|---|
+| Diagnóstico concluído com itens | `GerarOrcamento` | cria o orçamento com token de decisão e envia o e-mail com itens, total, validade e links | `OrcamentoGerado` ou `ComandoRejeitado` |
+| Decisão do cliente | aprovação ou reprovação (API ou link do e-mail) | na aprovação, cria a cobrança no Mercado Pago e o pagamento `PENDENTE` | `OrcamentoAprovado` com o link de pagamento, ou `OrcamentoReprovado` |
+| Validade do orçamento | job de prazos (5 min) | marca `EXPIRADO` | `OrcamentoExpirado` |
+| Pagamento | webhook ou reconciliação (60 s) | consulta o pagamento no Mercado Pago e aplica o status | `PagamentoAprovado` ou `PagamentoRecusado` |
+| Prazo do pagamento | job de prazos (5 min) | reconcilia uma última vez e marca `EXPIRADO` | `PagamentoRecusado` com motivo `EXPIRADO` |
+| Compensação de pagamento recusado ou de falha na execução | `CancelarOrcamento` | cancela o orçamento, se existir (idempotente) | `OrcamentoCancelado` (`orcamentoId` nulo se a OS não tem orçamento) |
+| Compensação de falha na execução | `EstornarPagamento` | estorna no Mercado Pago o pagamento aprovado | `PagamentoEstornado` (valor zero se não havia pagamento aprovado) |
 
 Comandos repetidos com `mensagemId` novo (reenvio por prazo no orquestrador) produzem a mesma resposta de negócio: `GerarOrcamento` para uma OS que já tem orçamento publica `OrcamentoGerado` com os dados existentes, `CancelarOrcamento` sobre orçamento cancelado responde `OrcamentoCancelado` e `EstornarPagamento` sobre pagamento estornado repete `PagamentoEstornado`.
 

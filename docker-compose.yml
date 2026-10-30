@@ -1,0 +1,87 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: billing-db
+    environment:
+      POSTGRES_DB: billing
+      POSTGRES_USER: ${DB_USER:-billing}
+      POSTGRES_PASSWORD: ${DB_PASS:?defina DB_PASS no .env}
+    ports:
+      - "5433:5432"
+    volumes:
+      - billing-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-billing} -d billing"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - billing-net
+
+  localstack:
+    image: localstack/localstack:3
+    container_name: billing-localstack
+    environment:
+      SERVICES: sqs
+      AWS_DEFAULT_REGION: us-east-1
+    ports:
+      - "4566:4566"
+    volumes:
+      - ./localstack/init/ready.d:/etc/localstack/init/ready.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "awslocal sqs get-queue-url --queue-name oficina-local-execution-comandos > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks:
+      - billing-net
+
+  mailhog:
+    image: mailhog/mailhog:v1.0.1
+    container_name: billing-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - billing-net
+
+  api:
+    build: .
+    container_name: billing-api
+    depends_on:
+      db:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://db:5432/billing
+      DB_USER: ${DB_USER:-billing}
+      DB_PASS: ${DB_PASS:?defina DB_PASS no .env}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      SQS_ENDPOINT: http://localstack:4566
+      AWS_REGION: us-east-1
+      APP_URL_PUBLICA: http://localhost:8081
+      NOTIFICACAO_CANAL: ${NOTIFICACAO_CANAL:-smtp}
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      MAIL_FROM: ${MAIL_FROM:-oficina@example.com}
+      ENV: local
+    ports:
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health/liveness"]
+      interval: 30s
+      timeout: 3s
+      start_period: 40s
+      retries: 3
+    networks:
+      - billing-net
+
+networks:
+  billing-net:
+
+volumes:
+  billing-pgdata:

@@ -125,6 +125,11 @@ resilience4j:
         ignore-exceptions:
           - org.springframework.web.client.HttpClientErrorException
 
+info:
+  app:
+    nome: ${spring.application.name}
+    commit: ${GIT_COMMIT:local}
+
 management:
   endpoints:
     web:
@@ -144,6 +149,8 @@ management:
   info:
     git:
       mode: simple
+    env:
+      enabled: true
   otlp:
     metrics:
       export:

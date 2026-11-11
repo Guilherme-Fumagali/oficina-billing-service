@@ -191,6 +191,6 @@ class OrcamentoTest {
         var orcamento = Orcamento.criar(dados, TokenDecisao.calcularHash(TOKEN), AGORA, VALIDADE);
 
         assertThat(orcamento.getTotal()).isEqualTo(new BigDecimal("210.00"));
-        assertThat(itens()).allSatisfy(item -> assertThat(item.getSubtotal().scale()).isEqualTo(2));
+        assertThat(itens()).isNotEmpty().allSatisfy(item -> assertThat(item.getSubtotal().scale()).isEqualTo(2));
     }
 }

@@ -8,6 +8,7 @@ import com.oficina.billing.domain.valueobject.DecisaoOrcamento;
 import jakarta.mail.MessagingException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Primary;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 @Component
+@Primary
 @ConditionalOnProperty(prefix = "app.notificacao", name = "canal", havingValue = "smtp")
 public class SmtpNotificacaoCliente implements NotificacaoCliente {
 

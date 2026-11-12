@@ -1,0 +1,133 @@
+name: Infra
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: Ação do Terraform no ambiente da branch
+        type: choice
+        options:
+          - plan
+          - apply
+        default: plan
+
+permissions:
+  contents: read
+
+env:
+  AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+  TF_VAR_ambiente: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+
+jobs:
+  validate:
+    name: Format & validate (infra)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - run: terraform fmt -check -recursive
+
+      - run: terraform init -backend=false
+
+      - run: terraform validate
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: v0.55.0
+
+      - run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - run: tflint --format compact
+
+      - name: Checkov
+        run: docker run --rm -v "$PWD:/repo" -w /repo bridgecrew/checkov:3.2.334 -d . --config-file .checkov.yaml
+
+  plan:
+    name: Plan (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: validate
+    if: github.event_name == 'workflow_dispatch' && contains(fromJSON('["main", "develop"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      rede: ${{ steps.rede.outputs.existe }}
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_VAR_mp_access_token: ${{ secrets.MP_ACCESS_TOKEN }}
+      TF_VAR_mp_webhook_secret: ${{ secrets.MP_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Conferir rede da plataforma
+        id: rede
+        run: |
+          if SAIDA=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/vpc-id" 2>&1); then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ParameterNotFound <<<"$SAIDA"; then
+            echo "::notice::Rede de ${AMBIENTE} não provisionada pelo oficina-infra-k8s, plan abortado."
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$SAIDA"
+            exit 1
+          fi
+
+      - uses: hashicorp/setup-terraform@v3
+        if: steps.rede.outputs.existe == 'true'
+        with:
+          terraform_version: "1.9.8"
+
+      - if: steps.rede.outputs.existe == 'true'
+        run: terraform init -backend-config="key=billing/${AMBIENTE}/terraform.tfstate"
+
+      - if: steps.rede.outputs.existe == 'true'
+        run: terraform plan -input=false
+
+  apply:
+    name: Apply (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: plan
+    if: github.event_name == 'workflow_dispatch' && inputs.acao == 'apply' && needs.plan.outputs.rede == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      TF_VAR_mp_access_token: ${{ secrets.MP_ACCESS_TOKEN }}
+      TF_VAR_mp_webhook_secret: ${{ secrets.MP_WEBHOOK_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+
+      - run: terraform init -backend-config="key=billing/${AMBIENTE}/terraform.tfstate"
+
+      - run: terraform apply -auto-approve -input=false

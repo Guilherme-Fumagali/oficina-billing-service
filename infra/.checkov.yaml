@@ -1,0 +1,14 @@
+framework:
+  - terraform
+compact: true
+quiet: true
+skip-check:
+  - CKV_AWS_337  # parâmetro SSM com chave KMS própria; usa a chave da AWS
+  - CKV2_AWS_34  # todo parâmetro SSM como SecureString; só os segredos são
+  - CKV_AWS_118  # monitoramento avançado do RDS; custo extra
+  - CKV_AWS_129  # exportar logs do RDS ao CloudWatch; ficam no parameter group
+  - CKV_AWS_157  # RDS Multi-AZ; dobra o custo
+  - CKV_AWS_293  # proteção contra exclusão; ambiente destruído a cada sessão
+  - CKV_AWS_353  # Performance Insights; custo extra
+  - CKV_AWS_354  # Performance Insights com chave KMS própria; recurso desligado
+  - CKV2_AWS_73  # fila SQS com chave KMS própria; usa SSE-SQS

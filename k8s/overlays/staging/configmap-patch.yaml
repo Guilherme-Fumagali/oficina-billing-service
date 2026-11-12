@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-service-config
+data:
+  ENV: staging
+  NEW_RELIC_APP_NAME: oficina-billing-service-staging
+  FILA_OS_EVENTOS: oficina-staging-os-eventos
+  FILA_BILLING_COMANDOS: oficina-staging-billing-comandos
+  FILA_DLQ: oficina-staging-billing-comandos-dlq

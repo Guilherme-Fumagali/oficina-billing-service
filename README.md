@@ -321,6 +321,16 @@ A infraestrutura do serviço fica em [`infra/`](infra) (Terraform, state `billin
 
 Os manifestos ficam em [`k8s/`](k8s) (Kustomize): Deployment com 2 réplicas, Service NodePort `30081`, HPA por CPU (70%, de 2 a 3 réplicas), PodDisruptionBudget, ServiceAccount e ConfigMap, com overlays `staging` e `prod`. O contêiner roda como usuário não-root (UID 1001), sem escalada de privilégio, sem capabilities e com sistema de arquivos somente leitura (`/tmp` em `emptyDir`), com sondas de startup, liveness e readiness e desligamento gracioso.
 
+O checkov falha o job **Format & validate (infra)** para qualquer verificação não listada em [`infra/.checkov.yaml`](infra/.checkov.yaml):
+
+| Verificação | Motivo |
+|---|---|
+| `CKV_AWS_157`, `CKV_AWS_118`, `CKV_AWS_353`, `CKV_AWS_354` | Multi-AZ, monitoramento avançado e Performance Insights têm custo e não são necessários no ambiente de estudo |
+| `CKV_AWS_129` | os logs de consultas lentas e de conexões ficam no parameter group, consultáveis no console do RDS, sem custo de exportação para o CloudWatch |
+| `CKV_AWS_293` | o ambiente é destruído ao final de cada sessão |
+| `CKV2_AWS_73` | filas com SSE-SQS, sem chave KMS própria |
+| `CKV_AWS_337`, `CKV2_AWS_34` | parâmetros com a chave gerenciada pela AWS; a senha do banco e as credenciais do Mercado Pago são `SecureString` |
+
 ## CI/CD
 
 Workflows em [`.github/workflows`](.github/workflows):

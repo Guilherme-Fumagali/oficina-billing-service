@@ -1,0 +1,15 @@
+jwt:
+  secret: ${JWT_SECRET:minha-chave-super-secreta-para-desenvolvimento-local-32chars}
+
+spring:
+  cloud:
+    aws:
+      credentials:
+        access-key: test
+        secret-key: test
+      sqs:
+        endpoint: ${SQS_ENDPOINT:http://localhost:4566}
+
+app:
+  mercado-pago:
+    exigir-assinatura: ${MP_EXIGIR_ASSINATURA:false}

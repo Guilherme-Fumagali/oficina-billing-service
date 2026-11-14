@@ -1,0 +1,551 @@
+{
+  "components" : {
+    "schemas" : {
+      "Dados" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "DecisaoRequest" : {
+        "properties" : {
+          "decisao" : {
+            "enum" : [ "APROVAR", "REPROVAR" ],
+            "type" : "string"
+          },
+          "token" : {
+            "type" : "string"
+          }
+        },
+        "required" : [ "decisao", "token" ],
+        "type" : "object"
+      },
+      "ItemResponse" : {
+        "properties" : {
+          "descricao" : {
+            "type" : "string"
+          },
+          "precoUnitario" : {
+            "type" : "number"
+          },
+          "quantidade" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "referenciaId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "subtotal" : {
+            "type" : "number"
+          },
+          "tipo" : {
+            "enum" : [ "SERVICO", "PECA" ],
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "NotificacaoMercadoPagoRequest" : {
+        "properties" : {
+          "action" : {
+            "type" : "string"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/Dados"
+          },
+          "type" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "OrcamentoResponse" : {
+        "properties" : {
+          "aprovadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "canalDecisao" : {
+            "enum" : [ "CLIENTE", "LINK", "BALCAO" ],
+            "type" : "string"
+          },
+          "canceladoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "clienteId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "clienteNome" : {
+            "type" : "string"
+          },
+          "criadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "expiradoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "itens" : {
+            "items" : {
+              "$ref" : "#/components/schemas/ItemResponse"
+            },
+            "type" : "array"
+          },
+          "osId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "pagamento" : {
+            "$ref" : "#/components/schemas/PagamentoResponse"
+          },
+          "reprovadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "AGUARDANDO_APROVACAO", "APROVADO", "REPROVADO", "EXPIRADO", "CANCELADO" ],
+            "type" : "string"
+          },
+          "total" : {
+            "type" : "number"
+          },
+          "validoAte" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "veiculoModelo" : {
+            "type" : "string"
+          },
+          "veiculoPlaca" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PagamentoResponse" : {
+        "properties" : {
+          "aprovadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "criadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "estornadoEm" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "linkPagamento" : {
+            "type" : "string"
+          },
+          "meio" : {
+            "type" : "string"
+          },
+          "orcamentoId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "osId" : {
+            "format" : "uuid",
+            "type" : "string"
+          },
+          "prazo" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "status" : {
+            "enum" : [ "PENDENTE", "APROVADO", "RECUSADO", "ESTORNADO", "EXPIRADO" ],
+            "type" : "string"
+          },
+          "statusDetalhe" : {
+            "type" : "string"
+          },
+          "valor" : {
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "ProblemDetail" : {
+        "properties" : {
+          "detail" : {
+            "type" : "string"
+          },
+          "instance" : {
+            "format" : "uri",
+            "type" : "string"
+          },
+          "properties" : {
+            "additionalProperties" : {
+              "type" : "object"
+            },
+            "type" : "object"
+          },
+          "status" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "title" : {
+            "type" : "string"
+          },
+          "type" : {
+            "format" : "uri",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      }
+    },
+    "securitySchemes" : {
+      "bearerAuth" : {
+        "bearerFormat" : "JWT",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
+    }
+  },
+  "info" : {
+    "description" : "Orçamento, decisão do cliente e pagamento pelo Mercado Pago — Tech Challenge Fase 4 PosTech FIAP",
+    "title" : "Oficina Mecânica — Billing Service",
+    "version" : "1.0"
+  },
+  "openapi" : "3.0.1",
+  "paths" : {
+    "/api/orcamentos" : {
+      "get" : {
+        "operationId" : "buscarPorOs",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "osId",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrcamentoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Consultar o orçamento de uma OS, com o pagamento (cliente: apenas os próprios)",
+        "tags" : [ "Orçamentos" ]
+      }
+    },
+    "/api/orcamentos/{id}" : {
+      "get" : {
+        "operationId" : "buscar_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrcamentoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Consultar orçamento e pagamento (cliente: apenas os próprios)",
+        "tags" : [ "Orçamentos" ]
+      }
+    },
+    "/api/orcamentos/{id}/aprovacao" : {
+      "post" : {
+        "operationId" : "aprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrcamentoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Aprovar o orçamento e gerar a cobrança no Mercado Pago (cliente dono ou funcionário no balcão)",
+        "tags" : [ "Orçamentos" ]
+      }
+    },
+    "/api/orcamentos/{id}/decisao" : {
+      "get" : {
+        "operationId" : "confirmar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "decisao",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "APROVAR", "REPROVAR" ],
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Página de confirmação aberta pelo link do e-mail (pública, não altera o orçamento)",
+        "tags" : [ "Orçamentos — decisão por link" ]
+      },
+      "post" : {
+        "operationId" : "decidirPeloFormulario",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "token",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "decisao",
+          "required" : true,
+          "schema" : {
+            "enum" : [ "APROVAR", "REPROVAR" ],
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DecisaoRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrcamentoResponse"
+                }
+              },
+              "text/html" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Registrar a decisão com o token recebido por e-mail (pública, protegida pelo token)",
+        "tags" : [ "Orçamentos — decisão por link" ]
+      }
+    },
+    "/api/orcamentos/{id}/reprovacao" : {
+      "post" : {
+        "operationId" : "reprovar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/OrcamentoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Reprovar o orçamento (cliente dono ou funcionário no balcão)",
+        "tags" : [ "Orçamentos" ]
+      }
+    },
+    "/api/pagamentos/webhooks/mercado-pago" : {
+      "post" : {
+        "operationId" : "receber",
+        "parameters" : [ {
+          "in" : "header",
+          "name" : "x-signature",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "header",
+          "name" : "x-request-id",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "data.id",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "type",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "topic",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NotificacaoMercadoPagoRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ ],
+        "summary" : "Receber notificação do Mercado Pago (pública, assinatura HMAC no cabeçalho x-signature)",
+        "tags" : [ "Pagamentos — webhook" ]
+      }
+    },
+    "/api/pagamentos/{id}" : {
+      "get" : {
+        "operationId" : "buscar",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "uuid",
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PagamentoResponse"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "security" : [ {
+          "bearerAuth" : [ ]
+        } ],
+        "summary" : "Consultar pagamento (cliente: apenas os próprios)",
+        "tags" : [ "Pagamentos" ]
+      }
+    }
+  }
+}

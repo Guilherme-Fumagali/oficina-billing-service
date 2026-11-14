@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: billing-service-config
+data:
+  ENV: prod
+  NEW_RELIC_APP_NAME: oficina-billing-service-prod
+  FILA_OS_EVENTOS: oficina-prod-os-eventos
+  FILA_BILLING_COMANDOS: oficina-prod-billing-comandos
+  FILA_DLQ: oficina-prod-billing-comandos-dlq

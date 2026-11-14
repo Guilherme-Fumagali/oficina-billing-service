@@ -1,0 +1,276 @@
+name: CI/CD
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build and test
+        run: ./mvnw -B verify
+
+      - name: Resumo de cobertura
+        if: always()
+        run: |
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            {
+              echo "### Cobertura JaCoCo"
+              awk -F, 'NR > 1 { lm += $8; lc += $9; bm += $6; bc += $7 }
+                END { printf "| Contador | Cobertura |\n|---|---|\n| Linhas | %.2f%% |\n| Ramos | %.2f%% |\n", 100 * lc / (lm + lc), 100 * bc / (bm + bc) }' \
+                target/site/jacoco/jacoco.csv
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: target/site/jacoco/
+          retention-days: 5
+
+  sonar:
+    name: SonarCloud
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Analyze
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            ./mvnw -B verify sonar:sonar
+            exit 0
+          fi
+          pr=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open \
+            --json number,baseRefName --jq '.[0] | select(.) | "\(.number) \(.baseRefName)"')
+          if [ -z "$pr" ]; then
+            echo "SonarCloud: sem pull request aberto para $GITHUB_REF_NAME; a análise roda no pull request e na main." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          read -r numero base <<< "$pr"
+          ./mvnw -B verify sonar:sonar -Dsonar.pullrequest.key="$numero" \
+            -Dsonar.pullrequest.branch="$GITHUB_REF_NAME" -Dsonar.pullrequest.base="$base"
+
+  build-and-push-image:
+    name: Build & push no ECR
+    needs: [build-and-test, sonar]
+    if: >-
+      !cancelled() && needs.build-and-test.result == 'success' && needs.sonar.result == 'success'
+      && github.event_name == 'push' && contains(fromJSON('["main", "develop"]'), github.ref_name)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
+      publicada: ${{ steps.vars.outputs.publicar }}
+    env:
+      AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Login no ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Resolver repositório do ambiente
+        id: vars
+        run: |
+          echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          if ! REPO=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/billing/ecr-repository-url" \
+                        --query 'Parameter.Value' --output text 2>&1); then
+            grep -q ParameterNotFound <<<"$REPO" || { echo "$REPO"; exit 1; }
+            echo "::notice::ECR do Billing em ${AMBIENTE} não provisionado, push pulado."
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          elif ! SAIDA=$(aws ecr describe-repositories --repository-names "${REPO##*/}" 2>&1); then
+            grep -q RepositoryNotFoundException <<<"$SAIDA" || { echo "$SAIDA"; exit 1; }
+            echo "::notice::Repositório ECR do Billing em ${AMBIENTE} não existe, push pulado."
+            echo "publicar=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "repository=${REPO}" >> "$GITHUB_OUTPUT"
+            echo "publicar=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+        if: steps.vars.outputs.publicar == 'true'
+
+      - uses: docker/build-push-action@v6
+        if: steps.vars.outputs.publicar == 'true'
+        with:
+          context: .
+          push: true
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+          tags: |
+            ${{ steps.vars.outputs.repository }}:${{ github.sha }}
+            ${{ steps.vars.outputs.repository }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  cluster:
+    name: Conferir cluster (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: build-and-push-image
+    if: ${{ !cancelled() && needs.build-and-push-image.result == 'success' && needs.build-and-push-image.outputs.publicada == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    outputs:
+      existe: ${{ steps.cluster.outputs.existe }}
+    env:
+      AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - id: cluster
+        run: |
+          if SAIDA=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/eks-cluster-name" 2>&1); then
+            echo "existe=true" >> "$GITHUB_OUTPUT"
+          elif grep -q ParameterNotFound <<<"$SAIDA"; then
+            echo "::notice::Cluster de ${AMBIENTE} desligado, imagem publicada e deploy pulado."
+            echo "existe=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$SAIDA"
+            exit 1
+          fi
+
+  deploy:
+    name: Deploy no EKS (${{ github.ref_name == 'main' && 'prod' || 'staging' }})
+    needs: [build-and-push-image, cluster]
+    if: ${{ !cancelled() && needs.build-and-push-image.result == 'success' && needs.cluster.outputs.existe == 'true' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    concurrency:
+      group: deploy-billing-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AMBIENTE: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+      NAMESPACE: oficina
+      SERVICO: billing-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+
+      - name: Resolver cluster e imagem do SSM
+        run: |
+          CLUSTER=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/eks-cluster-name" \
+            --query 'Parameter.Value' --output text)
+          REPOSITORY=$(aws ssm get-parameter --name "/oficina/${AMBIENTE}/billing/ecr-repository-url" \
+            --query 'Parameter.Value' --output text)
+          echo "CLUSTER=${CLUSTER}" >> "$GITHUB_ENV"
+          echo "REPOSITORY=${REPOSITORY}" >> "$GITHUB_ENV"
+
+      - name: Aguardar cluster ACTIVE
+        run: aws eks wait cluster-active --name "$CLUSTER" --region us-east-1
+
+      - name: Configurar kubeconfig
+        run: aws eks update-kubeconfig --name "$CLUSTER" --region us-east-1
+
+      - name: Criar Secret do serviço a partir do SSM
+        env:
+          MP_EMAIL_PAGADOR_TESTE: ${{ env.AMBIENTE == 'staging' && vars.MP_EMAIL_PAGADOR_TESTE || '' }}
+        run: |
+          set -euo pipefail
+          ler() {
+            aws ssm get-parameter --name "$1" --with-decryption --query 'Parameter.Value' --output text
+          }
+          DB_ENDPOINT=$(ler "/oficina/${AMBIENTE}/billing/db-endpoint")
+          DB_NAME=$(ler "/oficina/${AMBIENTE}/billing/db-name")
+          DB_USER=$(ler "/oficina/${AMBIENTE}/billing/db-username")
+          DB_PASS=$(ler "/oficina/${AMBIENTE}/billing/db-password")
+          JWT_SECRET=$(ler "/oficina/${AMBIENTE}/jwt-secret")
+          MP_ACCESS_TOKEN=$(ler "/oficina/${AMBIENTE}/billing/mp-access-token")
+          MP_WEBHOOK_SECRET=$(ler "/oficina/${AMBIENTE}/billing/mp-webhook-secret")
+          NEW_RELIC_LICENSE_KEY=$(ler "/oficina/${AMBIENTE}/newrelic-license-key")
+          APP_URL_PUBLICA=$(ler "/oficina/${AMBIENTE}/api-gateway-url")
+          APP_URL_PUBLICA="${APP_URL_PUBLICA%/}"
+          for valor in "$DB_PASS" "$JWT_SECRET" "$MP_ACCESS_TOKEN" "$MP_WEBHOOK_SECRET" "$NEW_RELIC_LICENSE_KEY"; do
+            echo "::add-mask::${valor}"
+          done
+          kubectl create secret generic "${SERVICO}-secrets" -n "$NAMESPACE" \
+            --from-literal=DB_URL="jdbc:postgresql://${DB_ENDPOINT}/${DB_NAME}?sslmode=require" \
+            --from-literal=DB_USER="$DB_USER" \
+            --from-literal=DB_PASS="$DB_PASS" \
+            --from-literal=JWT_SECRET="$JWT_SECRET" \
+            --from-literal=MP_ACCESS_TOKEN="$MP_ACCESS_TOKEN" \
+            --from-literal=MP_WEBHOOK_SECRET="$MP_WEBHOOK_SECRET" \
+            --from-literal=APP_URL_PUBLICA="$APP_URL_PUBLICA" \
+            --from-literal=MP_EMAIL_PAGADOR_TESTE="$MP_EMAIL_PAGADOR_TESTE" \
+            --from-literal=NEW_RELIC_LICENSE_KEY="$NEW_RELIC_LICENSE_KEY" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - uses: imranismail/setup-kustomize@v2
+
+      - name: Aplicar manifestos do ambiente
+        working-directory: k8s/overlays/${{ env.AMBIENTE }}
+        run: |
+          kustomize edit set image "servico=${REPOSITORY}:${{ needs.build-and-push-image.outputs.image_tag }}"
+          kubectl apply -k .
+
+      - name: Aguardar rollout
+        run: kubectl rollout status "deployment/${SERVICO}" -n "$NAMESPACE" --timeout=600s
+
+      - name: Smoke test
+        run: |
+          kubectl exec -n "$NAMESPACE" "deploy/${SERVICO}" -- wget -qO- http://localhost:8080/actuator/health/readiness
+          kubectl exec -n "$NAMESPACE" "deploy/${SERVICO}" -- wget -qO- http://localhost:8080/actuator/info
+
+      - name: Diagnóstico em caso de falha
+        if: failure()
+        run: |
+          kubectl get pods -n "$NAMESPACE" -l "app.kubernetes.io/name=${SERVICO}" -o wide
+          kubectl describe "deployment/${SERVICO}" -n "$NAMESPACE"
+          kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp | tail -30
+          for p in $(kubectl get pods -n "$NAMESPACE" -l "app.kubernetes.io/name=${SERVICO}" -o name); do
+            echo "=== describe $p ==="; kubectl describe -n "$NAMESPACE" "$p"
+            echo "=== logs $p ==="
+            kubectl logs -n "$NAMESPACE" "$p" --tail=100 --all-containers --previous 2>/dev/null \
+              || kubectl logs -n "$NAMESPACE" "$p" --tail=100 --all-containers
+          done

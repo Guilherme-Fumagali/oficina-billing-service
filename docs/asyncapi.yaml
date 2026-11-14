@@ -1,0 +1,250 @@
+asyncapi: 2.6.0
+id: urn:oficina:billing-service
+info:
+  title: Oficina Mecânica — Billing Service (mensagens)
+  version: 1.0.0
+  description: Contrato assíncrono do Billing Service (SPEC-08); comandos em billing-comandos, respostas em os-eventos.
+  license: { name: Apache 2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
+defaultContentType: application/json
+servers:
+  aws:
+    url: https://sqs.us-east-1.amazonaws.com
+    protocol: sqs
+  local:
+    url: http://localhost:4566
+    protocol: sqs
+channels:
+  oficina-{ambiente}-billing-comandos:
+    description: Comandos do orquestrador da saga; após 5 recebimentos a mensagem vai para a DLQ.
+    parameters:
+      ambiente:
+        $ref: '#/components/parameters/ambiente'
+    bindings:
+      sqs:
+        queue:
+          name: oficina-{ambiente}-billing-comandos
+          fifoQueue: false
+          redrivePolicy:
+            deadLetterQueue:
+              name: oficina-{ambiente}-billing-comandos-dlq
+            maxReceiveCount: 5
+        bindingVersion: 0.2.0
+    publish:
+      operationId: receberComando
+      summary: O OS Service publica e o Billing Service consome.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/GerarOrcamento'
+          - $ref: '#/components/messages/CancelarOrcamento'
+          - $ref: '#/components/messages/EstornarPagamento'
+  oficina-{ambiente}-os-eventos:
+    description: Respostas e eventos do Billing Service para o orquestrador da saga.
+    parameters:
+      ambiente:
+        $ref: '#/components/parameters/ambiente'
+    bindings:
+      sqs:
+        queue:
+          name: oficina-{ambiente}-os-eventos
+          fifoQueue: false
+        bindingVersion: 0.2.0
+    subscribe:
+      operationId: publicarEvento
+      summary: O Billing Service publica pelo outbox e o OS Service consome.
+      message:
+        oneOf:
+          - $ref: '#/components/messages/OrcamentoGerado'
+          - $ref: '#/components/messages/OrcamentoAprovado'
+          - $ref: '#/components/messages/OrcamentoReprovado'
+          - $ref: '#/components/messages/OrcamentoExpirado'
+          - $ref: '#/components/messages/OrcamentoCancelado'
+          - $ref: '#/components/messages/PagamentoAprovado'
+          - $ref: '#/components/messages/PagamentoRecusado'
+          - $ref: '#/components/messages/PagamentoEstornado'
+          - $ref: '#/components/messages/ComandoRejeitado'
+components:
+  parameters:
+    ambiente:
+      schema:
+        type: string
+        enum: [local, staging, prod]
+  messageTraits:
+    atributosSqs:
+      headers:
+        type: object
+        required: [tipo, versao]
+        properties:
+          tipo: { type: string }
+          versao: { type: string }
+          newrelic: { type: string }
+          traceparent: { type: string }
+          tracestate: { type: string }
+  schemas:
+    Uuid: { type: string, format: uuid }
+    UuidOuNulo:
+      oneOf:
+        - $ref: '#/components/schemas/Uuid'
+        - type: 'null'
+    Instante: { type: string, format: date-time }
+    Dinheiro: { type: number, multipleOf: 0.01 }
+    Canal: { type: string, enum: [CLIENTE, LINK, BALCAO] }
+    Envelope:
+      type: object
+      required: [mensagemId, tipo, versao, sagaId, osId, origem, ocorridoEm, dados]
+      properties:
+        mensagemId: { $ref: '#/components/schemas/Uuid' }
+        tipo: { type: string }
+        versao: { type: integer, minimum: 1 }
+        sagaId: { $ref: '#/components/schemas/Uuid' }
+        osId: { $ref: '#/components/schemas/Uuid' }
+        causadaPor: { $ref: '#/components/schemas/UuidOuNulo' }
+        origem: { type: string, enum: [os-service, billing-service, execution-service] }
+        ocorridoEm: { $ref: '#/components/schemas/Instante' }
+        dados: { type: object }
+    DadosGerarOrcamento:
+      type: object
+      required: [clienteId, cliente, veiculo, itens]
+      properties:
+        clienteId: { $ref: '#/components/schemas/Uuid' }
+        cliente:
+          type: object
+          required: [nome, email]
+          properties:
+            nome: { type: string }
+            email: { type: string, format: email }
+        veiculo:
+          type: object
+          required: [placa, modelo]
+          properties:
+            placa: { type: string }
+            modelo: { type: string }
+        itens:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [tipo, referenciaId, descricao, quantidade, precoUnitario]
+            properties:
+              tipo: { type: string, enum: [SERVICO, PECA] }
+              referenciaId: { $ref: '#/components/schemas/Uuid' }
+              descricao: { type: string }
+              quantidade: { type: integer, minimum: 1 }
+              precoUnitario: { $ref: '#/components/schemas/Dinheiro' }
+    DadosMotivo:
+      type: object
+      properties:
+        motivo: { type: string }
+    DadosOrcamentoGerado:
+      type: object
+      required: [orcamentoId, total, validoAte]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        total: { $ref: '#/components/schemas/Dinheiro' }
+        validoAte: { $ref: '#/components/schemas/Instante' }
+    DadosOrcamentoAprovado:
+      type: object
+      required: [orcamentoId, aprovadoEm, canal, linkPagamento]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        aprovadoEm: { $ref: '#/components/schemas/Instante' }
+        canal: { $ref: '#/components/schemas/Canal' }
+        linkPagamento: { type: string, format: uri }
+    DadosOrcamentoReprovado:
+      type: object
+      required: [orcamentoId, reprovadoEm, canal]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        reprovadoEm: { $ref: '#/components/schemas/Instante' }
+        canal: { $ref: '#/components/schemas/Canal' }
+    DadosOrcamentoExpirado:
+      type: object
+      required: [orcamentoId, expiradoEm]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        expiradoEm: { $ref: '#/components/schemas/Instante' }
+    DadosOrcamentoCancelado:
+      type: object
+      required: [orcamentoId]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        motivo: { type: string }
+    DadosPagamentoAprovado:
+      type: object
+      required: [orcamentoId, pagamentoId, valor, aprovadoEm]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        pagamentoId: { $ref: '#/components/schemas/Uuid' }
+        valor: { $ref: '#/components/schemas/Dinheiro' }
+        aprovadoEm: { $ref: '#/components/schemas/Instante' }
+        meio: { type: string }
+    DadosPagamentoRecusado:
+      type: object
+      required: [orcamentoId, pagamentoId, motivo]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/Uuid' }
+        pagamentoId: { $ref: '#/components/schemas/Uuid' }
+        motivo: { type: string }
+    DadosPagamentoEstornado:
+      type: object
+      required: [valor, estornadoEm]
+      properties:
+        orcamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        pagamentoId: { $ref: '#/components/schemas/UuidOuNulo' }
+        valor: { $ref: '#/components/schemas/Dinheiro' }
+        estornadoEm: { $ref: '#/components/schemas/Instante' }
+    DadosComandoRejeitado:
+      type: object
+      required: [comando, motivo, codigo]
+      properties:
+        comando: { type: string, enum: [GerarOrcamento, CancelarOrcamento, EstornarPagamento] }
+        motivo: { type: string }
+        codigo: { type: string, enum: [DADOS_INVALIDOS] }
+  messages:
+    GerarOrcamento:
+      name: GerarOrcamento
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosGerarOrcamento' } } }] }
+    CancelarOrcamento:
+      name: CancelarOrcamento
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosMotivo' } } }] }
+    EstornarPagamento:
+      name: EstornarPagamento
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosMotivo' } } }] }
+    OrcamentoGerado:
+      name: OrcamentoGerado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoGerado' } } }] }
+    OrcamentoAprovado:
+      name: OrcamentoAprovado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoAprovado' } } }] }
+    OrcamentoReprovado:
+      name: OrcamentoReprovado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoReprovado' } } }] }
+    OrcamentoExpirado:
+      name: OrcamentoExpirado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoExpirado' } } }] }
+    OrcamentoCancelado:
+      name: OrcamentoCancelado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosOrcamentoCancelado' } } }] }
+    PagamentoAprovado:
+      name: PagamentoAprovado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoAprovado' } } }] }
+    PagamentoRecusado:
+      name: PagamentoRecusado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoRecusado' } } }] }
+    PagamentoEstornado:
+      name: PagamentoEstornado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosPagamentoEstornado' } } }] }
+    ComandoRejeitado:
+      name: ComandoRejeitado
+      traits: [{ $ref: '#/components/messageTraits/atributosSqs' }]
+      payload: { allOf: [{ $ref: '#/components/schemas/Envelope' }, { properties: { dados: { $ref: '#/components/schemas/DadosComandoRejeitado' } } }] }

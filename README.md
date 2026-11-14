@@ -382,6 +382,14 @@ Cobertura medida pelo JaCoCo na última execução de `./mvnw verify`:
 
 O build falha se a cobertura do projeto ficar abaixo de 80% das linhas ou de 70% dos ramos. Ficam fora da medição a classe `BillingServiceApplication`, a `OpenApiConfig` (somente anotações) e o código gerado pelo Lombok (`lombok.addLombokGeneratedAnnotation`). A cobertura e o quality gate também aparecem no SonarCloud (badges no topo).
 
+Execução do pipeline em 14/11/2026, com o resumo de cobertura publicado pelo job `Build & Test` e o deploy em homologação:
+
+![Pipeline com o resumo de cobertura](docs/evidencias/pipeline-cobertura.jpg)
+
+Análise da branch `main` no [SonarCloud](https://sonarcloud.io/project/overview?id=Guilherme-Fumagali_oficina-billing-service), com o quality gate aprovado:
+
+![SonarCloud dos três serviços](docs/evidencias/sonarcloud-main.jpg)
+
 ## Autenticação e papéis
 
 O serviço não emite tokens. A autenticação é feita pela Lambda do repositório `oficina-auth-lambda`, com segundo fator por e-mail, e o API Gateway valida o token antes de encaminhar as rotas protegidas. O serviço valida o JWT novamente com o mesmo contrato dos demais serviços: HS256, emissor `oficina-auth`, `sub` em formato UUID e `role` `CLIENTE` ou `FUNCIONARIO`. Requisição sem token válido recebe `401` e papel insuficiente recebe `403`, ambos em `application/problem+json`.

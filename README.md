@@ -25,7 +25,7 @@ Serviço de orçamento e pagamento do sistema de gestão de oficina mecânica, d
 | Preparação da conta do Mercado Pago | [`docs/mercado-pago.md`](docs/mercado-pago.md) |
 | Swagger UI | `http://localhost:8081/swagger-ui.html` na execução local |
 | Documentação de arquitetura da fase (ADRs, SPECs, diagramas) | [`tech-challenge-1/docs/tech-challenge-4`](https://github.com/Guilherme-Fumagali/tech-challenge-1/tree/develop/docs/tech-challenge-4) |
-| Vídeo de demonstração | a publicar |
+| Vídeo de demonstração | [youtu.be/dZqpV8ESU4s](https://youtu.be/dZqpV8ESU4s) |
 
 ## Arquitetura
 

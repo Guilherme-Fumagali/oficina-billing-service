@@ -156,6 +156,7 @@ management:
       export:
         url: ${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
         step: ${METRICS_EXPORT_STEP:60s}
+        aggregation-temporality: delta
         headers:
           api-key: ${NEW_RELIC_LICENSE_KEY:}
         resource-attributes:

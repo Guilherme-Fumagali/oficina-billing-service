@@ -25,7 +25,7 @@ Serviço de orçamento e pagamento do sistema de gestão de oficina mecânica, d
 | Preparação da conta do Mercado Pago | [`docs/mercado-pago.md`](docs/mercado-pago.md) |
 | Swagger UI | `http://localhost:8081/swagger-ui.html` na execução local |
 | Documentação de arquitetura da fase (ADRs, SPECs, diagramas) | [`tech-challenge-1/docs/tech-challenge-4`](https://github.com/Guilherme-Fumagali/tech-challenge-1/tree/develop/docs/tech-challenge-4) |
-| Vídeo de demonstração | a publicar |
+| Vídeo de demonstração | [youtu.be/dZqpV8ESU4s](https://youtu.be/dZqpV8ESU4s) |
 
 ## Arquitetura
 
@@ -381,6 +381,14 @@ Cobertura medida pelo JaCoCo na última execução de `./mvnw verify`:
 | **Total** | **98,6% (1460/1480)** | **89,1% (334/375)** |
 
 O build falha se a cobertura do projeto ficar abaixo de 80% das linhas ou de 70% dos ramos. Ficam fora da medição a classe `BillingServiceApplication`, a `OpenApiConfig` (somente anotações) e o código gerado pelo Lombok (`lombok.addLombokGeneratedAnnotation`). A cobertura e o quality gate também aparecem no SonarCloud (badges no topo).
+
+Execução do pipeline em 14/11/2026, com o resumo de cobertura publicado pelo job `Build & Test` e o deploy em homologação:
+
+![Pipeline com o resumo de cobertura](docs/evidencias/pipeline-cobertura.jpg)
+
+Análise da branch `main` no [SonarCloud](https://sonarcloud.io/project/overview?id=Guilherme-Fumagali_oficina-billing-service), com o quality gate aprovado:
+
+![SonarCloud dos três serviços](docs/evidencias/sonarcloud-main.jpg)
 
 ## Autenticação e papéis
 
